@@ -6,11 +6,12 @@
   },
   "spec": {
     "title": "Detect data volume drops · Tunisia flights",
-    "description": "Grafana version of the Dynatrace data-observability tutorial, on live flight data.",
+    "description": "Detecting data volume drops with baselines, forecasts and Grafana Machine Learning, on live flight data.",
     "tags": [
       "data-observability",
       "volume",
-      "tutorial"
+      "forecasting",
+      "machine-learning"
     ],
     "timeSettings": {
       "from": "now-24h",
@@ -27,7 +28,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook rebuilds the Dynatrace tutorial\n[*Detect data volume drops*](https://docs.dynatrace.com/docs/observe/data-observability/use-cases/detect-data-volume-drops)\nwith Grafana, Prometheus and the **Tunisia flights** pipeline:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**, so there are two parts:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast."
+              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning."
             }
           }
         }
@@ -38,7 +39,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "## 1. High ingestion frequency: baseline comparison\n\nOur source is a continuous stream: every minute, adsb.lol returns about 1,000 aircraft over\nTunisia and Europe. Dynatrace learns a baseline automatically. In Prometheus we use the same moment\n**yesterday** as the baseline, which absorbs the daily rhythm of air traffic for free."
+              "text": "## 1. High ingestion frequency: baseline comparison\n\nOur source is a continuous stream: every minute, adsb.lol returns about 1,000 aircraft over\nTunisia and Europe. The simplest robust baseline is the same moment **yesterday**: it absorbs the\ndaily rhythm of air traffic for free."
             }
           }
         }
@@ -48,7 +49,7 @@
         "spec": {
           "id": 3,
           "title": "Aircraft reported by adsb.lol: today vs. yesterday",
-          "description": "The alert fires when 'today' stays below the dashed line for 15 minutes.",
+          "description": "The alert fires when 'today' stays below the dashed line for 15 minutes. The dashed line is the same data shifted by 24 hours (offset 1d), so it only appears once the pipeline has run for a day.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -172,7 +173,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "**Tune before you trust it.** Dynatrace has an alert preview. In Grafana, open the rule in\n**Alerting → Alert rules → Edit** and use **Preview** to see how often it would have fired over the\nlast days. Raise or lower the `0.5` factor until it only fires on real incidents."
+              "text": "**Tune before you trust it.** Open the rule in **Alerting → Alert rules → Edit** and use\n**Preview** to see how often it would have fired over the last days. Raise or lower the `0.5`\nfactor until it only fires on real incidents."
             }
           }
         }
@@ -183,7 +184,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "## 2. Low ingestion frequency: one-step-ahead forecast\n\nFor batch data, a fixed threshold is too blunt and a rate is meaningless between batches. The\nDynatrace tutorial forecasts the **next hour's record count** and checks whether the actual count lands\ninside the prediction interval. We treat the **number of valid flight positions per hour** as our batch.\n\n| Dynatrace | Grafana / Prometheus |\n|---|---|\n| Workflow with cron trigger `0 * * * *` | Recording rules evaluated by the ruler on a schedule |\n| Generic Forecast Analysis | `avg_over_time` ± `stddev_over_time` over the history |\n| Learning period 72 h, end time `now-1h` | Subquery `[72h:1h] offset 1h`: 72 hourly samples, current hour excluded |\n| Coverage probability 0.9 | ± 1.645 standard deviations (normal approximation) |\n| Data points to predict: 1 | One band value per evaluation, compared with the current hour |\n| Run JavaScript: compare and alert | An alert rule comparing current count and lower bound |"
+              "text": "## 2. Low ingestion frequency: one-step-ahead forecast\n\nFor batch data, a fixed threshold is too blunt and a rate is meaningless between batches. Instead,\nforecast the **next hour's record count** and check whether the actual count lands inside the\nprediction interval. We treat the **number of valid flight positions per hour** as our batch.\n\n| Forecast setting | Prometheus implementation |\n|---|---|\n| Runs on a schedule | Recording rules evaluated by the ruler every 5 minutes |\n| Training period: 72 hours, current hour excluded | Subquery `[72h:1h] offset 1h`: 72 hourly samples |\n| Coverage probability: 90% | ± 1.645 standard deviations (normal approximation) |\n| Points to predict: 1 | One band value per evaluation, compared with the current hour |"
             }
           }
         }
@@ -194,7 +195,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 1: Schedule the analysis\n\nInstead of a workflow, the Prometheus ruler evaluates the group `volume-forecast` in `prometheus/rules.yml`\nevery 5 minutes. On Grafana Cloud, the same file is uploaded to the stack with `mimirtool rules load`."
+              "text": "### Step 1: Schedule the analysis\n\nThe Prometheus ruler evaluates the group `volume-forecast` in `prometheus/rules.yml` every 5 minutes. On Grafana\nCloud, the same file is uploaded to the stack with `mimirtool rules load`."
             }
           }
         }
@@ -217,7 +218,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 2: Analyze the data (forecast)\n\nThe forecast is the mean of the previous 72 hourly counts, with a band of ± 1.645 standard\ndeviations around it: about **90%** of normal hours should fall inside it."
+              "text": "### Step 2: Forecast\n\nThe forecast is the mean of the previous 72 hourly counts, with a band of ± 1.645 standard\ndeviations around it: about **90%** of normal hours should fall inside it."
             }
           }
         }
@@ -441,24 +442,13 @@
           }
         }
       },
-      "step2-season": {
-        "kind": "Cell",
-        "spec": {
-          "content": {
-            "kind": "Markdown",
-            "spec": {
-              "text": "**Seasonality matters here.** Air traffic has a strong daily cycle (almost nothing at 03:00, peaks in\nthe morning), so a flat 72-hour band is wide during the day and misfires at night. The Dynatrace\ntutorial gives the same advice: for seasonal data, train on **at least two weeks**. Two practical\noptions:\n\n- compare with the **same hour on previous days** (`offset 1d`, `offset 7d`), as in part 1;\n- on Grafana Cloud, use **Machine Learning → Metric forecasts**, which learns daily and weekly\n  seasonality and plays the role of the Dynatrace forecast analyzer."
-            }
-          }
-        }
-      },
       "step3": {
         "kind": "Cell",
         "spec": {
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 3: Retrieve the current records\n\nThe equivalent of the tutorial's `fetch events, from:now()-60min | summarize count()`:"
+              "text": "### Step 3: Retrieve the current records\n\nRecords received in the last hour:"
             }
           }
         }
@@ -478,7 +468,7 @@
       "step3-panel": {
         "kind": "Panel",
         "spec": {
-          "id": 16,
+          "id": 15,
           "title": "Flight positions received in the last hour",
           "description": "",
           "links": [],
@@ -565,7 +555,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 4: Compare prediction and current volume, then alert\n\nDynatrace runs a JavaScript step that compares the count with the forecast's lower bound and\ncreates an *Abnormal data volume drop* event. Here it is a single alert rule (in `prometheus/alerts.yml`).\n\nThe last line is a lesson from real data: without it, the rule fires every night, because the\nforecast still expects daytime traffic. It only alerts when the same hour yesterday had real traffic."
+              "text": "### Step 4: Compare prediction and current volume, then alert\n\nA single alert rule (in `prometheus/alerts.yml`) compares the current count with the forecast's lower bound.\n\nThe last line is a lesson from real data: without it, the rule fires every night, because the flat\nforecast still expects daytime traffic. It only alerts when the same hour yesterday had real traffic.\nPart 3 shows forecasts that understand the daily cycle and don't need this guard."
             }
           }
         }
@@ -585,9 +575,9 @@
       "step4-panel": {
         "kind": "Panel",
         "spec": {
-          "id": 19,
+          "id": 18,
           "title": "Headroom above the lower bound",
-          "description": "Below zero (red area) the current hour is under the forecast band.",
+          "description": "Below zero (red area) the current hour is under the forecast band. Needs more than 1 hour of history (the bound uses offset 1h); meaningful after about 3 hours.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -659,7 +649,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 5: Observe the low data volume alerts\n\nFiring and pending volume alerts are listed below and in **Alerting → Alert rules** (filter\n`pillar=volume`). To get notified, add a contact point (email, Slack) and a notification policy\nmatching `team=data-engineering`."
+              "text": "### Step 5: Observe the low data volume alerts\n\nFiring volume alerts are listed below and in **Alerting → Alert rules** (filter `pillar=volume`).\nTo get notified, add a contact point (email, Slack) and a notification policy matching\n`team=data-engineering`."
             }
           }
         }
@@ -667,7 +657,7 @@
       "step5-panel": {
         "kind": "Panel",
         "spec": {
-          "id": 21,
+          "id": 20,
           "title": "Volume alerts",
           "description": "",
           "links": [],
@@ -757,13 +747,649 @@
           }
         }
       },
+      "ml-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 3. Better forecasts with Grafana\n\nAir traffic has a strong daily cycle: almost nothing at 03:00, peaks in the morning. A flat\n72-hour average is too wide during the day and misfires at night. For seasonal data, a model needs\nto learn the cycle, ideally from **two weeks or more** of history. Grafana offers three levels:\n\n| Approach | Learns the daily cycle | Where it runs | Needs |\n|---|---|---|---|\n| **A. Seasonal baseline** (PromQL) | Yes, same hour on the last 7 days | Any Prometheus | 2+ days of data |\n| **B. Trend extrapolation** (`predict_linear`) | No, short-term trend only | Any Prometheus | A few hours |\n| **C. Grafana Machine Learning** forecast | Yes, daily and weekly, automatically | Grafana Cloud | 2+ days (daily), 2+ weeks (weekly) |"
+            }
+          }
+        }
+      },
+      "seasonal": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### A. Seasonal baseline: same hour on previous days\n\nThe forecast for this hour is the mean of the **same hour on each of the last 7 days**, with a\n± 1.645 sd band. At night the expected value is close to zero, so the band no longer misfires. The\nrules are in the group `volume-forecast-seasonal` (`prometheus/rules.yml`). The `or` with a `day` label keeps\nthe result valid while fewer than 7 days of history exist."
+            }
+          }
+        }
+      },
+      "seasonal-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- record: flights:positions:seasonal_mean\n  expr: |\n    avg without (day) (\n        label_replace(flights:positions:count1h offset 1d, \"day\", \"1\", \"\", \"\")\n     or label_replace(flights:positions:count1h offset 2d, \"day\", \"2\", \"\", \"\")\n     # … up to offset 7d\n    )"
+            }
+          }
+        }
+      },
+      "seasonal-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 24,
+          "title": "Seasonal baseline: same hour on the last 7 days",
+          "description": "Appears after 1 day of history; the band needs at least 2 days.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:count1h",
+                        "legendFormat": "actual (last hour)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:seasonal_upper",
+                        "legendFormat": "upper bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:seasonal_lower",
+                        "legendFormat": "lower bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "D",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:seasonal_mean",
+                        "legendFormat": "seasonal forecast",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "upper bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.fillBelowTo",
+                        "value": "lower bound"
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 20
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "lower bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "seasonal forecast"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "actual (last hour)"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "trend": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### B. Short-term trend with `predict_linear`\n\nPromQL's `predict_linear(v[range], seconds)` fits a straight line through recent samples and\nextrapolates it. Here: where will the hourly count be **one hour from now**, based on the last\n3 hours? It reacts quickly to a sudden decline but knows nothing about the daily cycle, so it is\nbest used together with A or C, not alone."
+            }
+          }
+        }
+      },
+      "trend-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "promql",
+              "code": "predict_linear(flights:positions:count1h[3h], 3600)"
+            }
+          }
+        }
+      },
+      "trend-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 27,
+          "title": "Linear trend: expected hourly count in 1 hour",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:count1h",
+                        "legendFormat": "actual (last hour)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "clamp_min(predict_linear(flights:positions:count1h[3h], 3600), 0)",
+                        "legendFormat": "predicted in 1 h",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "predicted in 1 h"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "purple"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "actual (last hour)"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "ml": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### C. Grafana Machine Learning: metric forecast\n\n**Grafana Cloud Machine Learning** trains a forecasting model on the history of a query, detects\ndaily and weekly seasonality automatically, and writes the prediction and a 95% interval back as\nmetrics in the `grafanacloud-ml-metrics` data source:\n\n- `tunisia_flight_positions:predicted{ml_forecast=\"yhat\"}`: the forecast\n- `tunisia_flight_positions:predicted{ml_forecast=\"yhat_lower\"}` and `…=\"yhat_upper\"}`: the interval\n- `tunisia_flight_positions:actual`: the real values, for comparison\n\nThe forecast job and its alert are managed as code in `terraform/main.tf`. The model retrains every\n24 hours, and its seasonality improves as history grows. The model needs at least **100 data\npoints** before its first training succeeds (about 3.5 hours at one point every 2 minutes).\n*Available on Grafana Cloud only.*"
+            }
+          }
+        }
+      },
+      "ml-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "hcl",
+              "code": "resource \"grafana_machine_learning_job\" \"flight_positions_forecast\" {\n  name            = \"Tunisia flight positions per hour\"\n  metric          = \"tunisia_flight_positions\"\n  datasource_type = \"prometheus\"\n  datasource_uid  = var.prometheus_uid\n  query_params    = { expr = \"flights:positions:count1h\" }\n  interval        = 120  # seconds between training points\n}\n\nresource \"grafana_machine_learning_alert\" \"flight_positions_drop\" {\n  job_id            = grafana_machine_learning_job.flight_positions_forecast.id\n  title             = \"Flight positions below ML forecast\"\n  anomaly_condition = \"low\"\n  for               = \"15m\"\n  labels            = { pillar = \"volume\", team = \"data-engineering\" }\n}"
+            }
+          }
+        }
+      },
+      "ml-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 30,
+          "title": "Grafana ML forecast with 95% interval",
+          "description": "Grafana Cloud Machine Learning. Points of 'actual' outside the band are anomalies.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_flight_positions:actual",
+                        "legendFormat": "actual",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_flight_positions:predicted{ml_forecast=\"yhat_upper\"}",
+                        "legendFormat": "upper bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_flight_positions:predicted{ml_forecast=\"yhat_lower\"}",
+                        "legendFormat": "lower bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "D",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_flight_positions:predicted{ml_forecast=\"yhat\"}",
+                        "legendFormat": "ML forecast",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "upper bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.fillBelowTo",
+                        "value": "lower bound"
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 20
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "lower bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ML forecast"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "actual"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "ml-alert": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "The ML alert fires when actual values stay **below** the forecast interval for 15 minutes. The\nequivalent PromQL condition, if you prefer a regular alert rule on the `grafanacloud-ml-metrics`\ndata source:"
+            }
+          }
+        }
+      },
+      "ml-alert-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "promql",
+              "code": "tunisia_flight_positions:actual\n  < bool ignoring(ml_forecast)\ntunisia_flight_positions:predicted{ml_forecast=\"yhat_lower\"}"
+            }
+          }
+        }
+      },
       "summary": {
         "kind": "Cell",
         "spec": {
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "## Summary\n\n| Data arrives… | Detect drops with | Rule |\n|---|---|---|\n| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n\nStart with volume: it is the cheapest check and catches the most incidents."
+              "text": "## Summary\n\n| Data arrives… | Detect drops with | Rule |\n|---|---|---|\n| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| With a daily or weekly cycle | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates."
             }
           }
         }
@@ -899,16 +1525,6 @@
               "source": "user",
               "element": {
                 "kind": "ElementReference",
-                "name": "step2-season"
-              }
-            }
-          },
-          {
-            "kind": "NotebookLayoutItem",
-            "spec": {
-              "source": "user",
-              "element": {
-                "kind": "ElementReference",
                 "name": "step3"
               }
             }
@@ -980,6 +1596,126 @@
               "element": {
                 "kind": "ElementReference",
                 "name": "step5-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "seasonal"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "seasonal-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "seasonal-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "trend"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "trend-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "trend-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml-alert"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "ml-alert-code"
               }
             }
           },

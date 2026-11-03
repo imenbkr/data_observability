@@ -149,15 +149,27 @@ Every alert has `pillar` and `team=data-engineering` labels, ready for notificat
 ## Notebook: detect data volume drops
 
 [`grafana/notebooks/detect-data-volume-drops.json`](grafana/notebooks/detect-data-volume-drops.json)
-is a Grafana Notebook that rebuilds the Dynatrace tutorial
-[*Detect data volume drops*](https://docs.dynatrace.com/docs/observe/data-observability/use-cases/detect-data-volume-drops)
-on this pipeline's live data. It mixes explanations, PromQL and YAML cells, and live panels:
+is a step-by-step Grafana Notebook on detecting data volume drops in this pipeline's live data. It
+mixes explanations, PromQL / YAML / HCL cells and live panels:
 
 1. **High ingestion frequency:** the adsb.lol stream compared with the same time yesterday, plus a
    missing-data check (`SourceVolumeBelowBaseline`, `SourceDataMissing`).
 2. **Low ingestion frequency:** the hourly count of flight positions compared with a one-step-ahead
    forecast. That's the mean of the last 72 hourly samples ± 1.645 sd (90% coverage), recorded by the
    `volume-forecast` rule group and alerted on by `FlightVolumeBelowForecast`.
+3. **Better forecasts with Grafana:**
+   - **A. Seasonal baseline:** the same hour on the last 7 days (`volume-forecast-seasonal`).
+   - **B. Short-term trend:** `predict_linear`.
+   - **C. Grafana Machine Learning:** a metric forecast (`grafana_machine_learning_job`) with an ML alert,
+     both managed in Terraform (Grafana Cloud only).
+
+Some panels need history before they show anything:
+
+| Panel | Needs |
+|---|---|
+| 72-hour forecast band, headroom | > 1 hour (meaningful after ~3 hours) |
+| "Yesterday" lines, seasonal baseline | 1 day (seasonal band: 2 days) |
+| Grafana ML forecast | 100 training points (~3.5 hours), then retrains every 24 hours |
 
 Notebooks need the `dashboard.notebooks` feature toggle (on in the local Grafana; on Grafana Cloud,
 ask Grafana support to enable it). A notebook is a `Notebook` resource in the
@@ -183,7 +195,7 @@ enabled: add `-e TF_VAR_enable_notebook=true` to the Terraform commands above.
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts
 ├── alloy/config.alloy           # ships metrics to Grafana Cloud (profile "cloud")
-├── terraform/main.tf            # deploys the dashboard (and notebook) to Grafana Cloud as code
+├── terraform/main.tf            # dashboard, ML forecast + alert (and notebook) on Grafana Cloud as code
 ├── grafana/notebooks/           # "Detect data volume drops" notebook (scripts/build_notebook.py)
 └── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```

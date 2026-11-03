@@ -57,11 +57,35 @@ resource "grafana_dashboard" "tunisia_flights" {
 # Notebooks have no typed resource yet, so the generic App Platform resource deploys the manifest.
 resource "grafana_apps_generic_resource" "volume_drops_notebook" {
   count = var.enable_notebook ? 1 : 0
-  manifest = jsondecode(replace(
+  manifest = jsondecode(replace(replace(
     file("${path.module}/../grafana/notebooks/detect-data-volume-drops.json"),
-    "__DATASOURCE_UID__", var.prometheus_uid,
+    "__DATASOURCE_UID__", var.prometheus_uid),
+    "__ML_DATASOURCE_UID__", "grafanacloud-ml-metrics",
   ))
   allow_ui_updates = true
+}
+
+# Grafana Cloud Machine Learning: forecast of the hourly flight-position count.
+# Results are written to the grafanacloud-ml-metrics data source as
+# tunisia_flight_positions:predicted{ml_forecast="yhat|yhat_lower|yhat_upper"} and :actual.
+resource "grafana_machine_learning_job" "flight_positions_forecast" {
+  name            = "Tunisia flight positions per hour"
+  description     = "Forecast of valid flight positions per hour; learns daily and weekly seasonality"
+  metric          = "tunisia_flight_positions"
+  datasource_type = "prometheus"
+  datasource_uid  = var.prometheus_uid
+  query_params    = { expr = "flights:positions:count1h" }
+  interval        = 120     # seconds between training points; the model needs 100+ points (~3.5 h)
+  training_window = 2592000 # 30 days (90 days at 2-minute points exceeds the sample limit)
+}
+
+resource "grafana_machine_learning_alert" "flight_positions_drop" {
+  job_id            = grafana_machine_learning_job.flight_positions_forecast.id
+  title             = "Flight positions below ML forecast"
+  anomaly_condition = "low"
+  for               = "15m"
+  labels            = { pillar = "volume", team = "data-engineering" }
+  annotations       = { summary = "Hourly flight positions are below the Grafana ML forecast interval" }
 }
 
 output "notebook_url" {

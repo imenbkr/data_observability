@@ -17,6 +17,8 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "grafana" / "notebooks" /
 URL = os.getenv("GRAFANA_URL", "http://localhost:3000").rstrip("/")
 TOKEN = os.getenv("GRAFANA_TOKEN", "")
 DS_UID = os.getenv("DATASOURCE_UID", "prom")
+# Grafana ML forecasts exist on Grafana Cloud only; locally those panels stay empty
+ML_DS_UID = os.getenv("ML_DATASOURCE_UID", DS_UID)
 NAMESPACE = os.getenv("NAMESPACE", "default")
 
 
@@ -30,7 +32,8 @@ def call(method, path, body=None):
 
 
 def main():
-    notebook = json.loads(SRC.read_text().replace("__DATASOURCE_UID__", DS_UID))
+    text = SRC.read_text().replace("__ML_DATASOURCE_UID__", ML_DS_UID).replace("__DATASOURCE_UID__", DS_UID)
+    notebook = json.loads(text)
     name = notebook["metadata"]["name"]
     base = f"/apis/dashboard.grafana.app/v2beta1/namespaces/{NAMESPACE}/notebooks"
     try:

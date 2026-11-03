@@ -37,7 +37,7 @@ groups:
           / clamp_min(sum(rate(adsb_api_requests_total[10m])), 1e-9)
 
   # "Detect data volume drops" (see grafana/notebooks/): a one-step-ahead forecast of the
-  # hourly record count, like the Dynatrace Generic Forecast Analysis.
+  # hourly record count.
   - name: volume-forecast
     interval: 5m
     rules:
@@ -57,3 +57,35 @@ groups:
         expr: |
           avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
           + 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h)
+
+  # Seasonal baseline: the same hour on each of the last 7 days. The "day" label plus "or"
+  # keeps the result valid while fewer than 7 days of history exist.
+  - name: volume-forecast-seasonal
+    interval: 5m
+    rules:
+      - record: flights:positions:seasonal_mean
+        expr: |
+          avg without (day) (
+                label_replace(flights:positions:count1h offset 1d, "day", "1", "", "")
+             or label_replace(flights:positions:count1h offset 2d, "day", "2", "", "")
+             or label_replace(flights:positions:count1h offset 3d, "day", "3", "", "")
+             or label_replace(flights:positions:count1h offset 4d, "day", "4", "", "")
+             or label_replace(flights:positions:count1h offset 5d, "day", "5", "", "")
+             or label_replace(flights:positions:count1h offset 6d, "day", "6", "", "")
+             or label_replace(flights:positions:count1h offset 7d, "day", "7", "", "")
+          )
+      - record: flights:positions:seasonal_stddev
+        expr: |
+          stddev without (day) (
+                label_replace(flights:positions:count1h offset 1d, "day", "1", "", "")
+             or label_replace(flights:positions:count1h offset 2d, "day", "2", "", "")
+             or label_replace(flights:positions:count1h offset 3d, "day", "3", "", "")
+             or label_replace(flights:positions:count1h offset 4d, "day", "4", "", "")
+             or label_replace(flights:positions:count1h offset 5d, "day", "5", "", "")
+             or label_replace(flights:positions:count1h offset 6d, "day", "6", "", "")
+             or label_replace(flights:positions:count1h offset 7d, "day", "7", "", "")
+          )
+      - record: flights:positions:seasonal_lower
+        expr: clamp_min(flights:positions:seasonal_mean - 1.645 * flights:positions:seasonal_stddev, 0)
+      - record: flights:positions:seasonal_upper
+        expr: flights:positions:seasonal_mean + 1.645 * flights:positions:seasonal_stddev
