@@ -17,9 +17,9 @@
         "hide": 0,
         "current": {},
         "refresh": 1,
-        "regex": "",
         "includeAll": false,
-        "multi": false
+        "multi": false,
+        "regex": "/^(Prometheus|grafanacloud-.+-prom)$/"
       },
       {
         "name": "airline",

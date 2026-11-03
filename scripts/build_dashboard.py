@@ -255,7 +255,9 @@ y += 8
 
 VARIABLES = [
     {"name": "datasource", "label": "Data source", "type": "datasource", "query": "prometheus", "hide": 0,
-     "current": {}, "refresh": 1, "regex": "", "includeAll": False, "multi": False},
+     "current": {}, "refresh": 1, "includeAll": False, "multi": False,
+     # local data source is "Prometheus"; on Grafana Cloud it is "grafanacloud-<stack>-prom"
+     "regex": "/^(Prometheus|grafanacloud-.+-prom)$/"},
 ] + [
     {"name": name, "label": label, "type": "query", "datasource": DS, "query": {"query": query, "refId": "var"},
      "definition": query, "refresh": 2, "includeAll": True, "multi": True, "allValue": ".*", "sort": 1,
