@@ -67,9 +67,20 @@ container replaces local Prometheus and Grafana and sends the metrics to your Gr
      --address="${GRAFANA_CLOUD_PROM_URL%/api/prom/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
    ```
 
-4. In your stack's Grafana, go to **Dashboards → New → Import** and upload
-   [`grafana/dashboards/tunisia-flights.json`](grafana/dashboards/tunisia-flights.json). Pick the
-   `grafanacloud-…-prom` data source in the **Data source** dropdown.
+4. Deploy the dashboard as code with Terraform ([`terraform/main.tf`](terraform/main.tf)). Create a
+   service account with the **Admin** role in your stack's Grafana, add `GRAFANA_CLOUD_URL` and
+   `GRAFANA_CLOUD_SA_TOKEN` to `.env`, then review and apply the plan:
+
+   ```bash
+   set -a && . ./.env && set +a
+   TF="docker run --rm -u $(id -u):$(id -g) -v $PWD:/work -w /work/terraform -e HOME=/tmp \
+     -e TF_VAR_grafana_url=$GRAFANA_CLOUD_URL -e TF_VAR_grafana_token=$GRAFANA_CLOUD_SA_TOKEN \
+     hashicorp/terraform:1.9.8"
+   $TF init && $TF plan -out=tfplan && $TF apply tfplan
+   ```
+
+   After changing the dashboard (`python3 scripts/build_dashboard.py`), run `plan` and `apply` again.
+   Pick `grafanacloud-…-prom` in the dashboard's **Data source** dropdown if it isn't selected.
 
 ## The dashboard
 
@@ -160,6 +171,7 @@ panels with written analysis, and export as PDF or Markdown.
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts
 ├── alloy/config.alloy           # ships metrics to Grafana Cloud (profile "cloud")
+├── terraform/main.tf            # deploys the dashboard to Grafana Cloud as code
 └── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```
 
