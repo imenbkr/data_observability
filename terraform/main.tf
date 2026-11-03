@@ -15,7 +15,7 @@ terraform {
 }
 
 variable "grafana_url" {
-  description = "Grafana URL, e.g. https://demoo11y.grafana.net"
+  description = "Grafana URL, e.g. https://<stack>.grafana.net"
   type        = string
 }
 
