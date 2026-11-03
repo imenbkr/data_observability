@@ -262,7 +262,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "### Step 2: Forecast\n\nThe forecast is the mean of the previous 72 hourly counts, with a band of ± 1.645 standard\ndeviations around it: about **90%** of normal hours should fall inside it."
+              "text": "### Step 2: Forecast\n\nThe forecast is the mean of the previous 72 hourly counts, with a band of ± 1.645 standard\ndeviations around it: about **90%** of normal hours should fall inside it. The rules query the raw\ncounter rather than the recorded hourly series: recording rules only compute going forward, while\nthe raw counter already has the history."
             }
           }
         }
@@ -274,7 +274,7 @@
             "kind": "Code",
             "spec": {
               "language": "yaml",
-              "code": "- record: flights:positions:lower_bound\n  expr: |\n    clamp_min(\n      avg_over_time(flights:positions:count1h[72h:1h] offset 1h)\n      - 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h), 0)\n- record: flights:positions:upper_bound\n  expr: |\n    avg_over_time(flights:positions:count1h[72h:1h] offset 1h)\n    + 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h)"
+              "code": "- record: flights:positions:lower_bound\n  expr: |\n    clamp_min(\n      avg_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)\n      - 1.645 * stddev_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h), 0)\n- record: flights:positions:upper_bound\n  expr: |\n    avg_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)\n    + 1.645 * stddev_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)"
             }
           }
         }
@@ -284,7 +284,7 @@
         "spec": {
           "id": 16,
           "title": "Hourly flight positions and the 90% prediction band",
-          "description": "A point of 'actual' below the shaded band is a volume drop. The band appears once a few hours of history exist.",
+          "description": "A point of 'actual' below the shaded band is a volume drop. One training sample per clock hour (UTC): the forecast line needs 1 full past hour, the band needs 2.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -621,7 +621,7 @@
         "spec": {
           "id": 22,
           "title": "Headroom above the lower bound",
-          "description": "Below zero (red area) the current hour is under the forecast band. Needs more than 1 hour of history (the bound uses offset 1h); meaningful after about 3 hours.",
+          "description": "Below zero (red area) the current hour is under the forecast band. The forecast samples one point per clock hour (UTC) and skips the current hour, so it starts at the second full clock hour after data collection begins; the band needs one more hour.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -831,7 +831,7 @@
             "kind": "Code",
             "spec": {
               "language": "yaml",
-              "code": "- record: flights:positions:seasonal_mean\n  expr: |\n    avg without (day) (\n        label_replace(flights:positions:count1h offset 1d, \"day\", \"1\", \"\", \"\")\n     or label_replace(flights:positions:count1h offset 2d, \"day\", \"2\", \"\", \"\")\n     # … up to offset 7d\n    )"
+              "code": "- record: flights:positions:seasonal_mean\n  expr: |\n    avg without (day) (\n        label_replace(sum(increase(flights_valid_positions_total[1h] offset 1d)), \"day\", \"1\", \"\", \"\")\n     or label_replace(sum(increase(flights_valid_positions_total[1h] offset 2d)), \"day\", \"2\", \"\", \"\")\n     # … up to offset 7d\n    )"
             }
           }
         }

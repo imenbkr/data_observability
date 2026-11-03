@@ -45,18 +45,19 @@ groups:
       - record: flights:positions:count1h
         expr: sum(increase(flights_valid_positions_total[1h]))
       # Step 2: prediction band from the previous 72 hourly samples, excluding the current hour.
+      # Computed from the raw counter (not the recorded series) so it has history right away.
       # mean ± 1.645 sd ≈ 90% coverage probability
       - record: flights:positions:forecast_mean
-        expr: avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
+        expr: avg_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)
       - record: flights:positions:lower_bound
         expr: |
           clamp_min(
-            avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
-            - 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h), 0)
+            avg_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)
+            - 1.645 * stddev_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h), 0)
       - record: flights:positions:upper_bound
         expr: |
-          avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
-          + 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h)
+          avg_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)
+          + 1.645 * stddev_over_time(sum(increase(flights_valid_positions_total[1h]))[72h:1h] offset 1h)
 
   # Seasonal baseline: the same hour on each of the last 7 days. The "day" label plus "or"
   # keeps the result valid while fewer than 7 days of history exist.
@@ -66,24 +67,24 @@ groups:
       - record: flights:positions:seasonal_mean
         expr: |
           avg without (day) (
-                label_replace(flights:positions:count1h offset 1d, "day", "1", "", "")
-             or label_replace(flights:positions:count1h offset 2d, "day", "2", "", "")
-             or label_replace(flights:positions:count1h offset 3d, "day", "3", "", "")
-             or label_replace(flights:positions:count1h offset 4d, "day", "4", "", "")
-             or label_replace(flights:positions:count1h offset 5d, "day", "5", "", "")
-             or label_replace(flights:positions:count1h offset 6d, "day", "6", "", "")
-             or label_replace(flights:positions:count1h offset 7d, "day", "7", "", "")
+                label_replace(sum(increase(flights_valid_positions_total[1h] offset 1d)), "day", "1", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 2d)), "day", "2", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 3d)), "day", "3", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 4d)), "day", "4", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 5d)), "day", "5", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 6d)), "day", "6", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 7d)), "day", "7", "", "")
           )
       - record: flights:positions:seasonal_stddev
         expr: |
           stddev without (day) (
-                label_replace(flights:positions:count1h offset 1d, "day", "1", "", "")
-             or label_replace(flights:positions:count1h offset 2d, "day", "2", "", "")
-             or label_replace(flights:positions:count1h offset 3d, "day", "3", "", "")
-             or label_replace(flights:positions:count1h offset 4d, "day", "4", "", "")
-             or label_replace(flights:positions:count1h offset 5d, "day", "5", "", "")
-             or label_replace(flights:positions:count1h offset 6d, "day", "6", "", "")
-             or label_replace(flights:positions:count1h offset 7d, "day", "7", "", "")
+                label_replace(sum(increase(flights_valid_positions_total[1h] offset 1d)), "day", "1", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 2d)), "day", "2", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 3d)), "day", "3", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 4d)), "day", "4", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 5d)), "day", "5", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 6d)), "day", "6", "", "")
+             or label_replace(sum(increase(flights_valid_positions_total[1h] offset 7d)), "day", "7", "", "")
           )
       - record: flights:positions:seasonal_lower
         expr: clamp_min(flights:positions:seasonal_mean - 1.645 * flights:positions:seasonal_stddev, 0)
