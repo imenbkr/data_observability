@@ -1,126 +1,61 @@
-name: kafka-data-observability
-
-x-kafka: &kafka
-  image: apache/kafka:3.9.0
-  restart: unless-stopped
-  healthcheck:
-    test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
-    interval: 10s
-    timeout: 10s
-    retries: 12
-  environment: &kafka-env
-    CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
-    KAFKA_PROCESS_ROLES: broker,controller
-    KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka1:9093,2@kafka2:9093,3@kafka3:9093
-    KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-    KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-    KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-    KAFKA_DEFAULT_REPLICATION_FACTOR: 3
-    KAFKA_MIN_INSYNC_REPLICAS: 2
-    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-    KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-    KAFKA_HEAP_OPTS: -Xms768m -Xmx768m
-
-x-kafka-ready: &kafka-ready
-  kafka1: { condition: service_healthy }
-  kafka2: { condition: service_healthy }
-  kafka3: { condition: service_healthy }
+name: nouvelair-data-observability
 
 services:
-  # --- Kafka cluster: 3 combined broker/controller nodes (KRaft, no ZooKeeper) ---
-  kafka1:
-    <<: *kafka
-    hostname: kafka1
-    environment: { <<: *kafka-env, KAFKA_NODE_ID: 1, KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9092 }
-    volumes: [kafka1-data:/var/lib/kafka/data]
-  kafka2:
-    <<: *kafka
-    hostname: kafka2
-    environment: { <<: *kafka-env, KAFKA_NODE_ID: 2, KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9092 }
-    volumes: [kafka2-data:/var/lib/kafka/data]
-  kafka3:
-    <<: *kafka
-    hostname: kafka3
-    environment: { <<: *kafka-env, KAFKA_NODE_ID: 3, KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:9092 }
-    volumes: [kafka3-data:/var/lib/kafka/data]
-
-  # One-shot job: creates the topics, then exits.
-  kafka-init:
+  # Single-node Kafka in KRaft mode (no ZooKeeper)
+  kafka:
     image: apache/kafka:3.9.0
-    depends_on: *kafka-ready
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        set -e
-        T=/opt/kafka/bin/kafka-topics.sh
-        B=kafka1:9092
-        $$T --bootstrap-server $$B --create --if-not-exists --topic plant.events \
-          --partitions 12 --replication-factor 3 \
-          --config min.insync.replicas=2 --config retention.ms=604800000 --config compression.type=producer
-        $$T --bootstrap-server $$B --create --if-not-exists --topic plant.events.dlq \
-          --partitions 3 --replication-factor 3 --config retention.ms=1209600000
-        $$T --bootstrap-server $$B --describe --topic plant.events
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     restart: unless-stopped
-    depends_on: *kafka-ready
+    depends_on: { kafka: { condition: service_healthy } }
     ports: ["8080:8080"]
     environment:
-      KAFKA_CLUSTERS_0_NAME: plant
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:9092,kafka2:9092,kafka3:9092
+      KAFKA_CLUSTERS_0_NAME: nouvelair
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.9.0
-    restart: unless-stopped
-    depends_on: *kafka-ready
-    command: ["--kafka.server=kafka1:9092", "--kafka.server=kafka2:9092", "--kafka.server=kafka3:9092"]
-
-  # --- Data lake: S3 on LocalStack ---
-  localstack:
-    image: localstack/localstack
-    ports: ["${LOCALSTACK_PORT:-4566}:4566"]
-    environment:
-      - SERVICES=s3
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
-    volumes:
-      - ./.localstack:/var/lib/localstack
-      - ./localstack/init:/etc/localstack/init/ready.d:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-
-  # --- Pipeline ---
+  # Polls live ADS-B data (adsb.lol) and publishes Nouvelair flights to Kafka
   producer:
     build: ./producer
     restart: unless-stopped
-    depends_on:
-      kafka-init: { condition: service_completed_successfully }
-    deploy: { replicas: 2 }
+    depends_on: { kafka: { condition: service_healthy } }
     environment:
-      EVENTS_PER_SEC: ${EVENTS_PER_SEC:-5000}
-      INCIDENT_EVERY_MIN: ${INCIDENT_EVERY_MIN:-30}
-      SCHEMA_BREAK_RATE: ${SCHEMA_BREAK_RATE:-0.001}
+      POLL_SECONDS: ${POLL_SECONDS:-60}
+      USER_AGENT: ${USER_AGENT:-nouvelair-data-observability-demo}
+    volumes: [./data:/app/data:ro]
 
-  etl-consumer:
-    build: ./etl-consumer
+  # Checks data quality and exposes the five-pillar metrics
+  consumer:
+    build: ./consumer
     restart: unless-stopped
-    depends_on:
-      kafka-init: { condition: service_completed_successfully }
-      localstack: { condition: service_healthy }
-    deploy: { replicas: 3 }
-    environment:
-      BUCKET: plant-lake
-      S3_ENDPOINT: http://localstack:4566
+    depends_on: { kafka: { condition: service_healthy } }
 
-  # --- Observability ---
   prometheus:
     image: prom/prometheus:v3.4.0
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.time=30d
     ports: ["9090:9090"]
     volumes:
       - ./prometheus:/etc/prometheus:ro
@@ -135,15 +70,13 @@ services:
       GF_FEATURE_TOGGLES_ENABLE: dashboard.notebooks
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/data-health.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nouvelair.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
 
 volumes:
-  kafka1-data:
-  kafka2-data:
-  kafka3-data:
+  kafka-data:
   prometheus-data:
   grafana-data:

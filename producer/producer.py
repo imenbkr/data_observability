@@ -1,78 +1,134 @@
-"""Synthetic industrial-plant event producer.
+"""Polls live ADS-B data from adsb.lol and publishes Nouvelair flights to Kafka.
 
-Emits JSON events for 50 pumps at a target rate, with built-in incidents so every
-data-observability pillar has something to show:
-  - volume:       every INCIDENT_EVERY_MIN minutes, the rate drops to 25% for 3 minutes
-  - schema:       a fraction SCHEMA_BREAK_RATE of records lose the "host" field
-  - distribution: 5 "hot" pumps produce ~half of all events
+Every POLL_SECONDS it queries a few areas covering Tunisia and Nouvelair's main European
+markets, keeps aircraft whose callsign starts with LBT (Nouvelair's ICAO code), enriches
+them with the route from data/routes.csv and sends one message per aircraft.
 """
+import csv
 import json
 import os
-import random
 import time
 
+import requests
 from confluent_kafka import Producer
-from prometheus_client import Counter, start_http_server
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
-BOOT = os.getenv("KAFKA", "kafka1:9092,kafka2:9092,kafka3:9092")
-TOPIC = os.getenv("TOPIC", "plant.events")
-RATE = int(os.getenv("EVENTS_PER_SEC", "5000"))
-INCIDENT_EVERY_MIN = int(os.getenv("INCIDENT_EVERY_MIN", "30"))
-SCHEMA_BREAK_RATE = float(os.getenv("SCHEMA_BREAK_RATE", "0.001"))
+KAFKA = os.getenv("KAFKA", "kafka:9092")
+TOPIC = os.getenv("TOPIC", "nouvelair.positions")
+POLL_SECONDS = int(os.getenv("POLL_SECONDS", "60"))
+AIRLINE_PREFIX = os.getenv("AIRLINE_PREFIX", "LBT")
+API = "https://api.adsb.lol/v2/point/{lat}/{lon}/{radius}"
+USER_AGENT = os.getenv("USER_AGENT", "nouvelair-data-observability-demo")
 
-HOSTS = [f"pump-{i:02d}" for i in range(1, 51)]
-WEIGHTS = [10 if i < 5 else 1 for i in range(len(HOSTS))]
-EVENTS = ["Low pump pressure", "High temperature", "Vibration alert"]
+# (name, lat, lon); each area is a 250 NM radius circle
+AREAS = [
+    ("Tunisia North", 36.5, 10.0),
+    ("Tunisia South", 34.0, 10.5),
+    ("Central Mediterranean", 40.5, 8.5),
+    ("Southern France", 44.0, 4.5),
+    ("Northern France & Benelux", 49.5, 3.0),
+    ("Western Germany", 50.5, 8.0),
+    ("Eastern Germany & Poland", 52.0, 15.0),
+]
 
-sent = Counter("producer_records_sent_total", "Records acknowledged by Kafka")
-failed = Counter("producer_records_failed_total", "Records Kafka failed to acknowledge")
+api_requests = Counter("adsb_api_requests_total", "Requests to adsb.lol", ["area", "status"])
+api_latency = Histogram("adsb_api_request_seconds", "adsb.lol response time", ["area"])
+aircraft_seen = Gauge("adsb_aircraft_in_areas", "All aircraft returned by the last poll")
+airline_seen = Gauge("producer_airline_aircraft", "Airline aircraft found in the last poll")
+sent = Counter("producer_messages_sent_total", "Messages acknowledged by Kafka")
+failed = Counter("producer_messages_failed_total", "Messages Kafka failed to acknowledge")
+last_poll = Gauge("producer_last_poll_timestamp_seconds", "Unix time of the last completed poll")
+
+
+def load_routes():
+    with open("/app/data/routes.csv", newline="") as f:
+        return {r["callsign"]: r for r in csv.DictReader(f)}
+
+
+def fetch_area(session, name, lat, lon):
+    t0 = time.time()
+    try:
+        resp = session.get(API.format(lat=lat, lon=lon, radius=250), timeout=20)
+        api_latency.labels(name).observe(time.time() - t0)
+        api_requests.labels(name, str(resp.status_code)).inc()
+        resp.raise_for_status()
+        body = resp.json()
+        return body.get("now", time.time() * 1000) / 1000, time.time(), body.get("ac", [])
+    except (requests.RequestException, ValueError) as e:
+        api_requests.labels(name, "error").inc()
+        print(f"{name}: {e}", flush=True)
+        return None, None, []
+
+
+def to_message(ac, api_now, fetched_at, area, routes):
+    callsign = (ac.get("flight") or "").strip()
+    route = routes.get(callsign, {})
+    alt = ac.get("alt_baro")
+    seen_pos = ac.get("seen_pos")
+    return {
+        "hex": ac.get("hex"),
+        "callsign": callsign,
+        "registration": ac.get("r"),
+        "aircraft_type": ac.get("t"),
+        "lat": ac.get("lat"),
+        "lon": ac.get("lon"),
+        "altitude_ft": alt,  # int, or the string "ground" - kept as-is on purpose
+        "ground_speed_kt": ac.get("gs"),
+        "track_deg": ac.get("track"),
+        "vertical_rate_fpm": ac.get("baro_rate"),
+        "squawk": ac.get("squawk"),
+        "origin": route.get("origin"),
+        "origin_city": route.get("origin_city"),
+        "destination": route.get("destination"),
+        "destination_city": route.get("destination_city"),
+        "destination_country": route.get("destination_country"),
+        "position_ts": api_now - seen_pos if seen_pos is not None else None,
+        "fetched_at": fetched_at,
+        "source": "adsb.lol",
+        "source_area": area,
+        "raw_field_count": len(ac),
+    }
 
 
 def on_delivery(err, _msg):
     (failed if err else sent).inc()
 
 
-def in_incident(now):
-    return INCIDENT_EVERY_MIN > 0 and int(now // 60) % INCIDENT_EVERY_MIN < 3
-
-
-def make_record(now):
-    rec = {
-        "event_name": random.choices(EVENTS, [8, 1, 1])[0],
-        "host": random.choices(HOSTS, WEIGHTS)[0],
-        "status": random.choice(["OPEN", "CLOSED"]),
-        "impact_level": "INFRASTRUCTURE",
-        # the source system timestamps the event up to 30 s before we publish it
-        "record_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - random.uniform(0, 30))),
-    }
-    if rec["status"] == "CLOSED":
-        rec["end_ts"] = rec["record_ts"]
-    if random.random() < SCHEMA_BREAK_RATE:
-        del rec["host"]
-    return rec
-
-
 def main():
     start_http_server(8001)
-    p = Producer({
-        "bootstrap.servers": BOOT,
-        "acks": "all",
-        "enable.idempotence": True,
-        "compression.type": "lz4",
-        "linger.ms": 20,
-        "batch.size": 262144,
-    })
-    print(f"producing ~{RATE} events/s to {TOPIC}", flush=True)
+    routes = load_routes()
+    producer = Producer({"bootstrap.servers": KAFKA, "acks": "all", "linger.ms": 50})
+    session = requests.Session()
+    session.headers["User-Agent"] = USER_AGENT
+    print(f"tracking {AIRLINE_PREFIX}* flights in {len(AREAS)} areas every {POLL_SECONDS}s "
+          f"({len(routes)} known routes)", flush=True)
+
     while True:
-        tick = time.time()
-        rate = RATE // 4 if in_incident(tick) else RATE
-        for _ in range(rate):
-            rec = make_record(tick)
-            p.produce(TOPIC, json.dumps(rec).encode(), key=rec.get("host", "unknown"),
-                      on_delivery=on_delivery)
-            p.poll(0)
-        p.poll(0)
-        time.sleep(max(0.0, 1.0 - (time.time() - tick)))
+        started = time.time()
+        latest, total = {}, 0
+        for name, lat, lon in AREAS:
+            api_now, fetched_at, aircraft = fetch_area(session, name, lat, lon)
+            total += len(aircraft)
+            for ac in aircraft:
+                if not (ac.get("flight") or "").startswith(AIRLINE_PREFIX):
+                    continue
+                # areas overlap: keep the freshest position per aircraft
+                prev = latest.get(ac.get("hex"))
+                if prev is None or ac.get("seen_pos", 1e9) < prev[0].get("seen_pos", 1e9):
+                    latest[ac.get("hex")] = (ac, api_now, fetched_at, name)
+            time.sleep(1)  # be polite to a free API
+
+        for ac, api_now, fetched_at, area in latest.values():
+            msg = to_message(ac, api_now, fetched_at, area, routes)
+            producer.produce(TOPIC, json.dumps(msg).encode(), key=msg["hex"], on_delivery=on_delivery)
+        producer.flush(10)
+
+        aircraft_seen.set(total)
+        airline_seen.set(len(latest))
+        last_poll.set(time.time())
+        print(f"poll: {total} aircraft, {len(latest)} {AIRLINE_PREFIX} flights: "
+              f"{', '.join(sorted(m[0]['flight'].strip() for m in latest.values()))}", flush=True)
+        time.sleep(max(0.0, POLL_SECONDS - (time.time() - started)))
 
 
 if __name__ == "__main__":

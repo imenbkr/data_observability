@@ -1,52 +1,29 @@
-KT := docker compose exec kafka1 /opt/kafka/bin
+.PHONY: up down clean ps logs flights topic routes help
 
-.PHONY: up down clean ps logs lag lake topics load scale \
-        chaos-broker heal-broker chaos-consumer heal-consumer chaos-schema heal-schema
-
-up:            ## Build and start the whole stack
+up:       ## Build and start the stack
 	docker compose up -d --build
 
-down:          ## Stop the stack, keep data
+down:     ## Stop the stack, keep data
 	docker compose down
 
-clean:         ## Stop the stack and delete all Kafka/Prometheus/Grafana data
+clean:    ## Stop the stack and delete all data
 	docker compose down -v
 
-ps:            ## Show service status
+ps:       ## Show service status
 	docker compose ps
 
-logs:          ## Follow pipeline logs
-	docker compose logs -f producer etl-consumer
+logs:     ## Follow producer and consumer logs
+	docker compose logs -f producer consumer
 
-topics:        ## Describe the topics
-	$(KT)/kafka-topics.sh --bootstrap-server kafka1:9092 --describe --topic plant.events
+flights:  ## Show the Nouvelair flights found in the latest polls
+	docker compose logs producer | grep 'poll:' | tail -5
 
-lag:           ## Show consumer-group lag per partition
-	$(KT)/kafka-consumer-groups.sh --bootstrap-server kafka1:9092 --describe --group plant-etl
+topic:    ## Read the 3 latest messages from Kafka
+	docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+	  --topic nouvelair.positions --max-messages 3 --from-beginning --timeout-ms 10000
 
-lake:          ## List the latest Parquet files in the data lake
-	docker compose exec localstack awslocal s3 ls s3://plant-lake/events/ --recursive --human-readable 2>/dev/null | grep parquet | tail -10
+routes:   ## Refresh data/routes.csv from public sources, then restart the producer
+	python3 scripts/build_routes.py && docker compose restart producer
 
-load:          ## Raise load: make load RATE=20000
-	EVENTS_PER_SEC=$(or $(RATE),20000) docker compose up -d --no-deps producer
-
-scale:         ## Scale the pipeline: make scale P=3 C=6
-	docker compose up -d --no-deps --scale producer=$(or $(P),2) --scale etl-consumer=$(or $(C),3) producer etl-consumer
-
-chaos-broker:  ## Kill one broker (replication / ISR shrink)
-	docker compose stop kafka2
-heal-broker:
-	docker compose start kafka2
-
-chaos-consumer: ## Stop the ETL (freshness + consumer lag)
-	docker compose stop etl-consumer
-heal-consumer:
-	docker compose up -d --no-deps etl-consumer
-
-chaos-schema:  ## 5% of records lose a field (schema + DLQ)
-	SCHEMA_BREAK_RATE=0.05 docker compose up -d --no-deps producer
-heal-schema:
-	SCHEMA_BREAK_RATE=0.001 docker compose up -d --no-deps producer
-
-help:          ## List targets
-	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
+help:     ## List targets
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'

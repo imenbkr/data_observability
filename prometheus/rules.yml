@@ -1,46 +1,37 @@
 groups:
-  - name: data-observability
+  - name: nouvelair-data-observability
     interval: 1m
     rules:
-      # --- Volume ---
-      - record: etl:records:rate5m
-        expr: sum(rate(etl_records_total[5m]))
-      - record: producer:records:rate5m
-        expr: sum(rate(producer_records_sent_total[5m]))
-      # One-step-ahead prediction band: mean +/- 1.645 sd (~90% coverage) of the last hour,
-      # excluding the most recent 5 minutes. With weekly seasonality, use [2w] offset 1w instead.
-      - record: etl:records:lower_bound
-        expr: |
-          clamp_min(
-            avg_over_time(etl:records:rate5m[1h] offset 5m)
-            - 1.645 * stddev_over_time(etl:records:rate5m[1h] offset 5m), 0)
-      - record: etl:records:upper_bound
-        expr: |
-          avg_over_time(etl:records:rate5m[1h] offset 5m)
-          + 1.645 * stddev_over_time(etl:records:rate5m[1h] offset 5m)
+      # Volume
+      - record: nouvelair:messages:per_minute
+        expr: sum(rate(nouvelair_messages_total[5m])) * 60
+      - record: nouvelair:active_flights:yesterday
+        expr: nouvelair_active_flights offset 1d
 
-      # --- Completeness (volume in vs. volume out, a lineage signal) ---
-      - record: etl:completeness:ratio5m
-        expr: |
-          (etl:records:rate5m + sum(rate(etl_invalid_records_total[5m])))
-          / producer:records:rate5m
+      # Freshness
+      - record: nouvelair:position_age:p50
+        expr: histogram_quantile(0.50, sum by (le) (rate(nouvelair_position_age_seconds_bucket[10m])))
+      - record: nouvelair:position_age:p95
+        expr: histogram_quantile(0.95, sum by (le) (rate(nouvelair_position_age_seconds_bucket[10m])))
+      - record: nouvelair:stage_latency:p95
+        expr: histogram_quantile(0.95, sum by (le, stage) (rate(nouvelair_stage_latency_seconds_bucket[10m])))
 
-      # --- Freshness ---
-      - record: etl:lag:p50
-        expr: histogram_quantile(0.50, sum by (le) (rate(etl_record_lag_seconds_bucket[5m])))
-      - record: etl:lag:p95
-        expr: histogram_quantile(0.95, sum by (le) (rate(etl_record_lag_seconds_bucket[5m])))
-      - record: etl:consumer_lag:messages
-        expr: sum(kafka_consumergroup_lag{consumergroup="plant-etl", topic="plant.events"})
-
-      # --- Schema ---
-      - record: etl:invalid:ratio5m
+      # Schema / validity
+      - record: nouvelair:invalid:ratio
         expr: |
-          sum(rate(etl_invalid_records_total[5m]))
-          / (sum(rate(etl_invalid_records_total[5m])) + etl:records:rate5m)
-
-      # --- Distribution ---
-      - record: etl:records:share_by_host:1h
+          sum(rate(nouvelair_invalid_messages_total[30m]))
+          / clamp_min(sum(rate(nouvelair_messages_total[30m])), 1e-9)
+      - record: nouvelair:unknown_route:ratio
         expr: |
-          sum by (host) (rate(etl_records_total[1h]))
-          / ignoring(host) group_left sum(rate(etl_records_total[1h])) * 100
+          sum(rate(nouvelair_unknown_route_total[1h]))
+          / clamp_min(sum(rate(nouvelair_valid_positions_total[1h])), 1e-9)
+
+      # Lineage: does every record found at the source make it through each stage?
+      - record: nouvelair:completeness:ratio
+        expr: |
+          sum(rate(nouvelair_messages_total[10m]))
+          / clamp_min(sum(rate(producer_messages_sent_total[10m])), 1e-9)
+      - record: adsb:api_errors:ratio
+        expr: |
+          sum(rate(adsb_api_requests_total{status!="200"}[10m]))
+          / clamp_min(sum(rate(adsb_api_requests_total[10m])), 1e-9)

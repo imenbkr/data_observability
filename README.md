@@ -1,170 +1,138 @@
-# Kafka Data Observability with Grafana
+# Nouvelair Flight Data Observability
 
-A production-style streaming pipeline (**Kafka → ETL → S3 data lake**) instrumented for the
-five pillars of data observability: **volume, freshness, schema, distribution and lineage**.
-It ships with a ready-made Grafana dashboard, Prometheus alerting rules, and a guide for
-writing up your findings in a Grafana Notebook.
+Live tracking of **Nouvelair** flights (Tunisia ⇄ Europe), streamed through **Kafka** and
+monitored with **Grafana** using the five pillars of data observability: **volume,
+freshness, schema, distribution and lineage**.
 
-It's based on the article *Data Observability with Grafana: The Five Pillars in Practice*,
-adapted from Loki to a Kafka-based, high-volume setup.
-
-## Architecture
+All data is real: aircraft positions come from public ADS-B receivers through the free
+[adsb.lol](https://adsb.lol) API, and routes come from open aviation datasets.
 
 ```mermaid
 flowchart LR
-  subgraph Sources
-    P1[producer ×N<br/>synthetic plant events]
-  end
-  subgraph Kafka["Kafka cluster (3 brokers, KRaft, RF=3)"]
-    T[(plant.events<br/>12 partitions)]
-    D[(plant.events.dlq)]
-  end
-  subgraph ETL
-    C[etl-consumer ×N<br/>consumer group plant-etl]
-  end
-  S3[(S3 data lake<br/>LocalStack · Parquet/zstd)]
-  P1 -->|acks=all, idempotent, lz4| T
-  T --> C
-  C -->|valid, batched| S3
-  C -->|invalid + reason header| D
-
-  KE[kafka-exporter] --> PR[Prometheus]
-  P1 -. /metrics .-> PR
-  C -. /metrics .-> PR
-  Kafka --> KE
-  PR --> G[Grafana<br/>dashboard · alerts · Notebook]
+  A[adsb.lol<br/>live ADS-B API] -->|poll every 60 s| P[producer<br/>filter LBT* · add route]
+  R[(data/routes.csv<br/>524 Nouvelair routes)] --> P
+  P -->|nouvelair.positions| K[(Kafka)]
+  K --> C[consumer<br/>quality checks]
+  P -. metrics .-> M[Prometheus]
+  C -. metrics .-> M
+  M --> G[Grafana<br/>map · five pillars · alerts]
 ```
 
-| Component | Role |
+| Service | What it does |
 |---|---|
-| `kafka1..3` | Apache Kafka 3.9, KRaft (no ZooKeeper), RF=3, `min.insync.replicas=2` |
-| `producer` | Synthetic event generator (default 2 × 5,000 events/s) with built-in incidents |
-| `etl-consumer` | Validates, batches and writes Parquet to S3; rejects bad records to a DLQ; commits offsets only after the write (at-least-once) |
-| `localstack` | S3-compatible data lake (`s3://plant-lake/events/dt=YYYY-MM-DD/hour=HH/`) |
-| `kafka-exporter` | Topic offsets, consumer-group lag, ISR and broker metrics |
-| `prometheus` | Scrapes everything; recording rules and alerts live in [`prometheus/`](prometheus/) |
-| `grafana` | Provisioned **Data Health · Five Pillars** dashboard, with Notebooks enabled |
-| `kafka-ui` | Browse topics, partitions, consumer groups and messages |
-
-## The five pillars and their signals
-
-| Pillar | Question | Signal | Alert |
-|---|---|---|---|
-| **Volume** | Is the expected amount of data arriving? | `etl:records:rate5m` against a prediction band (mean ± 1.645 sd) | `DataVolumeBelowForecast`, `DataVolumeAboveForecast` |
-| **Freshness** | How old is the data when it lands? | `etl_record_lag_seconds` p50/p95, Kafka consumer lag, age of the last committed batch | `PipelineStalled`, `DataFreshnessDegraded`, `ConsumerLagGrowing` |
-| **Schema** | Has the structure changed? | DLQ rate by reason, min/max fields per record, schema variants per batch | `SchemaViolations`, `SchemaFieldCountChanged` |
-| **Distribution** | Do the values look normal? | Share of records by host, event-type mix, host cardinality | `HostCardinalityChanged` |
-| **Lineage** | Where does the data come from, and is all of it arriving? | Completeness (produced vs. landed + DLQ), broker/ISR health | `DataLoss` |
-
-Every alert has `pillar` and `team=data-engineering` labels, ready for notification routing.
+| `producer` | Every 60 s, queries 7 areas (Tunisia, Mediterranean, France, Benelux, Germany, Poland), keeps aircraft with a Nouvelair callsign (`LBT…`), adds the route (e.g. `LFPG → DTTA`) and publishes one message per aircraft |
+| `kafka` | Single-node Kafka 3.9 (KRaft) with the topic `nouvelair.positions` |
+| `consumer` | Validates every message and exposes the data-quality metrics and live flight positions |
+| `prometheus` | Stores metrics; recording and alerting rules are in [`prometheus/`](prometheus/) |
+| `grafana` | Provisioned **Nouvelair · Data Observability** dashboard with Notebooks enabled |
+| `kafka-ui` | Browse the topic and read the messages |
 
 ## Quick start
 
-Requirements: Docker with Compose v2, about 6 GB of free RAM, and 4 or more CPUs.
+Requirements: Docker with Compose v2, and an internet connection.
 
 ```bash
-git clone https://github.com/<you>/kafka-data-observability.git
-cd kafka-data-observability
-cp .env.example .env        # add your LOCALSTACK_AUTH_TOKEN if your LocalStack image needs one
-make up                     # or: docker compose up -d --build
+git clone https://github.com/<you>/nouvelair-data-observability.git
+cd nouvelair-data-observability
+docker compose up -d --build
 ```
 
 | UI | URL |
 |---|---|
-| Grafana (dashboard is the home page) | http://localhost:3000 |
+| Grafana dashboard | http://localhost:3000 |
 | Kafka UI | http://localhost:8080 |
 | Prometheus | http://localhost:9090 |
 
-Check that data is flowing:
+The first flights show up on the map after about 1–2 minutes. Run `make help` for shortcuts
+such as `make flights` (flights found in the latest polls) or `make topic` (read raw Kafka messages).
 
-```bash
-make lag     # consumer lag per partition should stay roughly flat
-make lake    # Parquet files appear every ~30 s
-```
+> Nouvelair flies mostly during the day, so expect few or no flights at night (UTC+1).
 
-The volume prediction band needs about 1 hour of history before it appears.
+## The data
 
-## Where the data comes from
-
-The data is **synthetic**. [`producer/producer.py`](producer/producer.py) simulates an industrial
-plant with 50 pumps, where each event looks like this:
+A message on the `nouvelair.positions` topic:
 
 ```json
-{"event_name": "Low pump pressure", "host": "pump-07", "status": "OPEN",
- "impact_level": "INFRASTRUCTURE", "record_ts": "2026-11-03T12:00:00Z"}
+{
+  "hex": "02a1b0", "callsign": "LBT719", "registration": "TS-INQ", "aircraft_type": "A320",
+  "lat": 39.12, "lon": 9.29, "altitude_ft": 36025, "ground_speed_kt": 441.4, "track_deg": 143.8,
+  "origin": "LFBD", "origin_city": "Bordeaux",
+  "destination": "DTTA", "destination_city": "Tunis", "destination_country": "Tunisia",
+  "position_ts": 1793722012.4, "fetched_at": 1793722013.1,
+  "source": "adsb.lol", "source_area": "Central Mediterranean", "raw_field_count": 47
+}
 ```
 
-It also injects problems on purpose so every pillar has something to show:
-
-| Incident | Default | Knob |
+| Data | Source | License |
 |---|---|---|
-| Volume drop to 25% for 3 minutes | every 30 minutes | `INCIDENT_EVERY_MIN` (0 = off) |
-| Records missing the `host` field | 0.1% | `SCHEMA_BREAK_RATE` |
-| Skewed distribution: 5 "hot" pumps send about half the events | always | edit `WEIGHTS` |
-| Source delay (`record_ts` up to 30 s before publish) | always | edit `make_record` |
+| Live positions | [adsb.lol API](https://www.adsb.lol/docs/open-data/api/) (community ADS-B network) | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) |
+| Callsign → route | [VRS standing data](https://github.com/vradarserver/standing-data) | CC0 |
+| Airports (city, country) | [OurAirports](https://ourairports.com/data/) | Public domain |
 
-To use real data, replace `make_record()` with a reader for a public stream or dataset, for
-example [Wikimedia EventStreams](https://stream.wikimedia.org/v2/stream/recentchange) (live
-edits as server-sent events) or the [NYC TLC trip records](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
-(Parquet files you can replay into Kafka at any speed). Then adjust `FIELDS`/`REQUIRED` in the
-consumer to match.
+**Polling rate:** the producer polls every 60 s (7 requests per minute in total). A cruising
+airliner moves about 14 km per minute, which is plenty for a live map and for data-quality
+checks, and stays gentle on a free community API. Don't go below about 15 s (`POLL_SECONDS`).
 
-## Break things on purpose
+To refresh the routes, run `make routes` (it calls `scripts/build_routes.py`). To track a
+different airline, set `AIRLINE_PREFIX` in the producer (e.g. `TAR` for Tunisair) and update
+the routes URL in the script.
 
-| Command | What you'll see |
-|---|---|
-| `make chaos-broker` / `make heal-broker` | Brokers online: 2, ISR shrinks; the pipeline keeps running |
-| `make chaos-consumer` / `make heal-consumer` | Consumer lag and freshness climb, `PipelineStalled` fires, then the backlog drains |
-| `make chaos-schema` / `make heal-schema` | DLQ rate spikes, the field-count minimum drops to 4, `SchemaViolations` fires |
-| `make load RATE=20000` | Throughput rises above the band (`DataVolumeAboveForecast`) |
-| `make scale P=3 C=6` | More producers and consumers; the consumer group rebalances |
+## The five pillars
 
-Run `make help` to list every target.
+Real data is messy, so the checks catch real problems and nothing is simulated.
 
-## Write it up in a Grafana Notebook
+| Pillar | Question | What's measured | Alert |
+|---|---|---|---|
+| **Volume** | Is the expected amount of data arriving? | Active flights vs. the same time yesterday; aircraft returned by the API | `NoFlightsWhileExpected`, `SourceApiFailing` |
+| **Freshness** | How old is the data when it lands? | Position age (aircraft broadcast → consumer), latency per pipeline stage, time since the last poll | `PipelineStalled`, `PositionsStale` |
+| **Schema** | Has the structure changed? | Rejected messages by reason (`missing_position`, `bad_altitude`, …), ADS-B fields per record, unknown routes | `InvalidMessages`, `RouteReferenceDataOutdated` |
+| **Distribution** | Do the values look normal? | Flights by destination country, aircraft types, altitude distribution | — |
+| **Lineage** | Where does the data come from, and does all of it arrive? | Counts at each stage (API → filter → Kafka → consumer → valid), API status per area | `MessagesLostInPipeline` |
 
-Grafana 13 Notebooks (enabled here through the `dashboard.notebooks` feature toggle) let you
-combine panels with written analysis, and export the result as Markdown or PDF.
+Two real quirks this pipeline handles:
 
-1. In Grafana, open **Notebooks → New notebook**.
-2. For each pillar, add a text block: what the pillar means, and the question it answers.
-3. Add the matching panel from the **Data Health · Five Pillars** dashboard, or a query from Explore.
-4. Trigger an incident (see above) and write down what you see. For example: *"14:30 volume
-   left the band; completeness stayed at 100%, so the drop came from the source, not the pipeline."*
-5. Export as PDF or Markdown, or share the link.
+- **Missing fields:** ADS-B transponders report different sets of fields, so the field count per record varies.
+- **Ground altitude:** `alt_baro` is the string `"ground"` instead of a number when an aircraft is on the ground.
+
+Every alert has `pillar` and `team=data-engineering` labels, ready for notification routing.
+
+## Showcase it with a Grafana Notebook
+
+Grafana 13 Notebooks (enabled through the `dashboard.notebooks` feature toggle) combine
+panels with written analysis, and export as PDF or Markdown.
+
+1. In Grafana, open **Notebooks → New notebook**, titled e.g. *"Is our flight data healthy? Nouvelair, one day"*.
+2. Start with the **map panel** and one paragraph about the data source.
+3. For each pillar, add a text block (the question it answers) and then the matching panel.
+4. Write what you observed. For example: *"Between 01:00 and 05:00 there are no flights,
+   which is expected: the volume alert compares with yesterday so it stays silent."*
+5. Export as PDF, or share the link.
 
 ## Project layout
 
 ```
 .
-├── docker-compose.yml          # the whole stack
-├── Makefile                    # up / down / chaos / load helpers
-├── producer/                   # synthetic event generator
-├── etl-consumer/               # Kafka → S3 Parquet + data-quality metrics
-├── prometheus/
-│   ├── prometheus.yml          # scrape config (DNS discovery for scaled services)
-│   ├── rules.yml               # recording rules per pillar
-│   └── alerts.yml              # alerting rules with pillar/team labels
-├── grafana/
-│   ├── provisioning/           # data source and dashboard providers
-│   └── dashboards/data-health.json
-└── localstack/init/            # creates the S3 bucket on startup
+├── docker-compose.yml
+├── Makefile
+├── data/routes.csv              # Nouvelair callsign → route reference data
+├── scripts/build_routes.py      # rebuilds routes.csv from public sources
+├── producer/producer.py         # adsb.lol → Kafka
+├── consumer/consumer.py         # Kafka → quality checks → metrics
+├── prometheus/                  # scrape config, recording rules, alerts
+└── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```
 
-## From demo to production
+## Ideas to extend it
 
-This repo runs on one machine. To get closer to a real deployment:
+- Store every position in a data lake (S3/MinIO + Parquet) for history and replay.
+- Add a Schema Registry (Avro) between the producer and the consumer.
+- Detect flight phases (take-off, cruise, landing) and estimated arrival times.
 
-- **Platform:** run Kafka on Kubernetes with [Strimzi](https://strimzi.io), enable TLS/SASL,
-  and spread brokers across availability zones.
-- **Schema contracts:** add a Schema Registry with Avro/Protobuf so producers can't publish
-  breaking changes.
-- **Lake format:** write Apache Iceberg tables instead of raw Parquet, and query them with Trino or Spark.
-- **Scale:** replace the Python consumer with Flink or Spark Structured Streaming beyond about
-  100k events/s; use Mimir for long-term metrics.
-- **Lineage:** propagate OpenTelemetry trace context in Kafka headers and send spans to
-  Tempo for a service graph, or emit OpenLineage events to Marquez.
+## Acknowledgements
+
+Based on the article *Data Observability with Grafana: The Five Pillars in Practice* by
+Imen Bakir. Flight data © adsb.lol contributors (ODbL).
 
 ## License
 
-[MIT](LICENSE)
+Code: [MIT](LICENSE). Data under `data/` is derived from CC0 and public-domain sources.
