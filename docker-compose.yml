@@ -50,8 +50,10 @@ services:
     restart: unless-stopped
     depends_on: { kafka: { condition: service_healthy } }
 
+  # --- Observability, option 1: self-hosted (COMPOSE_PROFILES=local) ---
   prometheus:
     image: prom/prometheus:v3.4.0
+    profiles: [local]
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -63,6 +65,7 @@ services:
 
   grafana:
     image: grafana/grafana:13.3.0
+    profiles: [local]
     restart: unless-stopped
     depends_on: [prometheus]
     ports: ["3000:3000"]
@@ -76,7 +79,23 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
 
+  # --- Observability, option 2: Grafana Cloud (COMPOSE_PROFILES=cloud) ---
+  alloy:
+    image: grafana/alloy:v1.5.1
+    profiles: [cloud]
+    restart: unless-stopped
+    command: run /etc/alloy/config.alloy --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data
+    ports: ["12345:12345"]
+    environment:
+      GRAFANA_CLOUD_PROM_URL: ${GRAFANA_CLOUD_PROM_URL:-}
+      GRAFANA_CLOUD_PROM_USER: ${GRAFANA_CLOUD_PROM_USER:-}
+      GRAFANA_CLOUD_API_TOKEN: ${GRAFANA_CLOUD_API_TOKEN:-}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+
 volumes:
   kafka-data:
+  alloy-data:
   prometheus-data:
   grafana-data:

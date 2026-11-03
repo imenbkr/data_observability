@@ -10,12 +10,24 @@
   "templating": {
     "list": [
       {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0,
+        "current": {},
+        "refresh": 1,
+        "regex": "",
+        "includeAll": false,
+        "multi": false
+      },
+      {
         "name": "airline",
         "label": "Airline",
         "type": "query",
         "datasource": {
           "type": "prometheus",
-          "uid": "prom"
+          "uid": "${datasource}"
         },
         "query": {
           "query": "label_values(flight_phase, airline)",
@@ -43,7 +55,7 @@
         "type": "query",
         "datasource": {
           "type": "prometheus",
-          "uid": "prom"
+          "uid": "${datasource}"
         },
         "query": {
           "query": "label_values(flight_phase, direction)",
@@ -112,7 +124,7 @@
       "id": 3,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 13,
@@ -349,7 +361,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_latitude{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -361,7 +373,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_longitude{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -373,7 +385,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "C",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_heading_degrees{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -385,7 +397,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "D",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_phase{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -397,7 +409,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "E",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_altitude_feet{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -409,7 +421,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "F",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_speed_kmh{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -421,7 +433,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "G",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_distance_left_km{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -433,7 +445,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "H",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_eta_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -445,7 +457,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "I",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_tracked_since_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -457,7 +469,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "J",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_last_update_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -597,7 +609,7 @@
       "id": 4,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 13,
@@ -1001,7 +1013,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_latitude{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1013,7 +1025,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_longitude{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1025,7 +1037,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "C",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_heading_degrees{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1037,7 +1049,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "D",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_phase{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1049,7 +1061,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "E",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_altitude_feet{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1061,7 +1073,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "F",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_speed_kmh{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1073,7 +1085,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "G",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_distance_left_km{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1085,7 +1097,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "H",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_eta_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1097,7 +1109,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "I",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_tracked_since_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1109,7 +1121,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "J",
           "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_last_update_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
@@ -1198,7 +1210,7 @@
       "id": 6,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1225,7 +1237,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights_active",
@@ -1250,7 +1262,7 @@
       "id": 7,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1277,7 +1289,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:messages:per_minute",
@@ -1302,7 +1314,7 @@
       "id": 8,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1337,7 +1349,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:position_age:p95",
@@ -1362,7 +1374,7 @@
       "id": 9,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1397,7 +1409,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:invalid:ratio",
@@ -1422,7 +1434,7 @@
       "id": 10,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1457,7 +1469,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:completeness:ratio",
@@ -1482,7 +1494,7 @@
       "id": 11,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -1513,7 +1525,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "count(ALERTS{alertstate=\"firing\", team=\"data-engineering\"}) or vector(0)",
@@ -1553,7 +1565,7 @@
       "id": 13,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1597,7 +1609,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights_active",
@@ -1606,7 +1618,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "flights:active:yesterday",
@@ -1621,7 +1633,7 @@
       "id": 14,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1652,7 +1664,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "adsb_aircraft_in_areas",
@@ -1661,7 +1673,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "producer_tunisia_aircraft",
@@ -1689,7 +1701,7 @@
       "id": 16,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1707,7 +1719,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:position_age:p50",
@@ -1716,7 +1728,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "flights:position_age:p95",
@@ -1731,7 +1743,7 @@
       "id": 17,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1755,7 +1767,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:stage_latency:p95",
@@ -1770,7 +1782,7 @@
       "id": 18,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1806,7 +1818,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "time() - (producer_last_poll_timestamp_seconds > 0)",
@@ -1834,7 +1846,7 @@
       "id": 20,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1859,7 +1871,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum by (reason) (increase(flights_invalid_messages_total[10m]))",
@@ -1874,7 +1886,7 @@
       "id": 21,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1895,7 +1907,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights_raw_field_count{stat=\"min\"}",
@@ -1904,7 +1916,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "B",
           "expr": "flights_raw_field_count{stat=\"max\"}",
@@ -1919,7 +1931,7 @@
       "id": 22,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -1937,7 +1949,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights:unknown_route:ratio",
@@ -1965,7 +1977,7 @@
       "id": 24,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 10,
@@ -1983,7 +1995,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "topk(10, flights_active_by_airline)",
@@ -2010,7 +2022,7 @@
       "id": 25,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 10,
@@ -2028,7 +2040,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "topk(10, flights_active_by_country)",
@@ -2055,7 +2067,7 @@
       "id": 26,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2149,7 +2161,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "flights_active_by_direction",
@@ -2181,7 +2193,7 @@
       "id": 27,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2199,7 +2211,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "topk(8, flights_active_by_type)",
@@ -2231,7 +2243,7 @@
       "id": 28,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 7,
@@ -2249,7 +2261,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum by (le) (increase(flights_altitude_feet_bucket[24h]))",
@@ -2289,7 +2301,7 @@
       "id": 30,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2316,7 +2328,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum(sum_over_time(adsb_aircraft_in_areas[1h:1m]))",
@@ -2343,7 +2355,7 @@
       "id": 31,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2370,7 +2382,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum(sum_over_time(producer_tunisia_aircraft[1h:1m]))",
@@ -2397,7 +2409,7 @@
       "id": 32,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2424,7 +2436,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum(increase(producer_messages_sent_total[1h]))",
@@ -2451,7 +2463,7 @@
       "id": 33,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2478,7 +2490,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum(increase(flights_messages_total[1h]))",
@@ -2505,7 +2517,7 @@
       "id": 34,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 5,
@@ -2532,7 +2544,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum(increase(flights_valid_positions_total[1h]))",
@@ -2574,7 +2586,7 @@
       "id": 36,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -2599,7 +2611,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "sum by (area, status) (increase(adsb_api_requests_total[10m]))",
@@ -2614,7 +2626,7 @@
       "id": 37,
       "datasource": {
         "type": "prometheus",
-        "uid": "prom"
+        "uid": "${datasource}"
       },
       "gridPos": {
         "h": 8,
@@ -2632,7 +2644,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prom"
+            "uid": "${datasource}"
           },
           "refId": "A",
           "expr": "histogram_quantile(0.95, sum by (le, area) (rate(adsb_api_request_seconds_bucket[10m])))",

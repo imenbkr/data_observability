@@ -6,7 +6,8 @@ import json
 import pathlib
 
 OUT = pathlib.Path(__file__).resolve().parent.parent / "grafana" / "dashboards" / "tunisia-flights.json"
-DS = {"type": "prometheus", "uid": "prom"}
+# A data source variable lets the same JSON work self-hosted and on Grafana Cloud
+DS = {"type": "prometheus", "uid": "${datasource}"}
 G, O, R = "green", "orange", "red"
 STAT = {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "area", "textMode": "value"}
 
@@ -253,6 +254,9 @@ panel("timeseries", "adsb.lol response time (95th percentile)", [
 y += 8
 
 VARIABLES = [
+    {"name": "datasource", "label": "Data source", "type": "datasource", "query": "prometheus", "hide": 0,
+     "current": {}, "refresh": 1, "regex": "", "includeAll": False, "multi": False},
+] + [
     {"name": name, "label": label, "type": "query", "datasource": DS, "query": {"query": query, "refId": "var"},
      "definition": query, "refresh": 2, "includeAll": True, "multi": True, "allValue": ".*", "sort": 1,
      "current": {"selected": True, "text": ["All"], "value": ["$__all"]}}

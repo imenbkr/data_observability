@@ -1,0 +1,27 @@
+// Scrapes the pipeline and ships the metrics to Grafana Cloud (profile "cloud").
+// Credentials come from .env: GRAFANA_CLOUD_PROM_URL, GRAFANA_CLOUD_PROM_USER, GRAFANA_CLOUD_API_TOKEN
+
+prometheus.scrape "producer" {
+  job_name        = "producer"
+  targets         = [{"__address__" = "producer:8001"}]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.scrape "consumer" {
+  job_name        = "consumer"
+  targets         = [{"__address__" = "consumer:8000"}]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROM_USER")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}

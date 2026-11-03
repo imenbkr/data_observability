@@ -35,6 +35,7 @@ Requirements: Docker with Compose v2, and an internet connection.
 ```bash
 git clone https://github.com/<you>/tunisia-flights-data-observability.git
 cd tunisia-flights-data-observability
+cp .env.example .env        # COMPOSE_PROFILES=local runs Prometheus + Grafana in Docker
 docker compose up -d --build
 ```
 
@@ -48,6 +49,27 @@ The first flights show up on the map after about 1–2 minutes. Run `make help` 
 such as `make flights` (flights found in the latest polls) or `make topic` (read raw Kafka messages).
 
 > Most Tunisia flights operate during the day, so expect few flights at night (Tunisia is UTC+1).
+
+## Run with Grafana Cloud instead
+
+Kafka, the producer and the consumer stay in Docker. A [Grafana Alloy](https://grafana.com/docs/alloy/)
+container replaces local Prometheus and Grafana and sends the metrics to your Grafana Cloud stack.
+
+1. In your stack, open **Prometheus → Details** and copy the remote write URL and the instance ID.
+   Create an access-policy token with `metrics:write`, `rules:read` and `rules:write`.
+2. In `.env`, set `COMPOSE_PROFILES=cloud`, `GRAFANA_CLOUD_PROM_URL`, `GRAFANA_CLOUD_PROM_USER`
+   and `GRAFANA_CLOUD_API_TOKEN` (see [`.env.example`](.env.example)), then run `docker compose up -d`.
+3. Upload the recording and alerting rules to the stack:
+
+   ```bash
+   set -a && . ./.env && set +a && docker run --rm -v "$PWD/prometheus:/rules:ro" grafana/mimirtool:2.14.0 \
+     rules load /rules/rules.yml /rules/alerts.yml \
+     --address="${GRAFANA_CLOUD_PROM_URL%/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
+   ```
+
+4. In your stack's Grafana, go to **Dashboards → New → Import** and upload
+   [`grafana/dashboards/tunisia-flights.json`](grafana/dashboards/tunisia-flights.json). Pick the
+   `grafanacloud-…-prom` data source in the **Data source** dropdown.
 
 ## The dashboard
 
@@ -137,6 +159,7 @@ panels with written analysis, and export as PDF or Markdown.
 ├── producer/producer.py         # adsb.lol → Kafka
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts
+├── alloy/config.alloy           # ships metrics to Grafana Cloud (profile "cloud")
 └── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```
 
