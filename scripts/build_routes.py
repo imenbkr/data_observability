@@ -17,6 +17,17 @@ COUNTRIES_URL = "https://davidmegginson.github.io/ourairports-data/countries.csv
 OUT = pathlib.Path(__file__).resolve().parent.parent / "data" / "routes.csv"
 
 
+# Airports whose OurAirports "municipality" is the suburb, not the city travellers know
+CITY_OVERRIDES = {
+    "DAOO": "Oran", "DTTJ": "Djerba", "EBBR": "Brussels", "EDDK": "Cologne", "EDDP": "Leipzig",
+    "EDDT": "Berlin Tegel", "EDLP": "Paderborn", "EGCN": "Doncaster", "EPRZ": "Rzeszów",
+    "LDZA": "Zagreb", "LFBO": "Toulouse", "LFJL": "Metz", "LFLL": "Lyon", "LFML": "Marseille",
+    "LFQQ": "Lille", "LFSB": "Basel-Mulhouse", "LFTH": "Toulon", "LIMC": "Milan",
+    "LJLJ": "Ljubljana", "LWSK": "Skopje", "UKBB": "Kyiv", "EDDF": "Frankfurt",
+    "EGNT": "Newcastle", "ESGG": "Gothenburg",
+}
+
+
 def fetch_csv(url):
     with urllib.request.urlopen(url, timeout=60) as resp:
         return list(csv.DictReader(io.StringIO(resp.read().decode("utf-8-sig"))))
@@ -29,7 +40,8 @@ def main():
     for a in fetch_csv(AIRPORTS_URL):
         code = a["icao_code"] or a["gps_code"] or a["ident"]
         airports[code] = {
-            "city": a["municipality"] or a["name"],
+            # "Paris (Roissy-en-France, Val-d'Oise)" -> "Paris"
+            "city": CITY_OVERRIDES.get(code) or (a["municipality"] or a["name"]).split(" (")[0].split(",")[0],
             "country": countries.get(a["iso_country"], a["iso_country"]),
             "lat": a["latitude_deg"],
             "lon": a["longitude_deg"],

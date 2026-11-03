@@ -16,7 +16,7 @@ groups:
           summary: "{{ $value | humanizePercentage }} of adsb.lol requests are failing"
 
       - alert: PipelineStalled
-        expr: time() - producer_last_poll_timestamp_seconds > 300
+        expr: time() - (producer_last_poll_timestamp_seconds > 0) > 300
         labels: { pillar: freshness, team: data-engineering, severity: page }
         annotations:
           summary: "The producer has not completed a poll for {{ $value | humanizeDuration }}"

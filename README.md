@@ -48,6 +48,18 @@ such as `make flights` (flights found in the latest polls) or `make topic` (read
 
 > Nouvelair flies mostly during the day, so expect few or no flights at night (UTC+1).
 
+## The dashboard
+
+- **How to read this dashboard:** a plain-language intro to the data and where it comes from.
+- **Map:** every Nouvelair plane in the air, pointing in its direction of travel and coloured by altitude.
+- **Flights table:** flight, from → to, status (climbing / cruising / descending), aircraft,
+  altitude, speed, distance left, **estimated arrival**, **tracked since**, **last update**.
+- **Five rows, one per pillar:** each one answers a single question about the data.
+
+ADS-B only carries position, not schedules. So *tracked since* is when the pipeline first
+saw the flight, and *estimated arrival* is calculated from the straight-line distance and the
+current speed.
+
 ## The data
 
 A message on the `nouvelair.positions` topic:
@@ -69,7 +81,8 @@ A message on the `nouvelair.positions` topic:
 | Callsign → route | [VRS standing data](https://github.com/vradarserver/standing-data) | CC0 |
 | Airports (city, country) | [OurAirports](https://ourairports.com/data/) | Public domain |
 
-**Polling rate:** the producer polls every 60 s (7 requests per minute in total). A cruising
+**Polling rate:** the producer polls every 60 s, spreading its 7 requests evenly over the
+minute (one every ~8.5 s) and backing off when adsb.lol answers `429 Too Many Requests`. A cruising
 airliner moves about 14 km per minute, which is plenty for a live map and for data-quality
 checks, and stays gentle on a free community API. Don't go below about 15 s (`POLL_SECONDS`).
 
@@ -116,6 +129,7 @@ panels with written analysis, and export as PDF or Markdown.
 ├── Makefile
 ├── data/routes.csv              # Nouvelair callsign → route reference data
 ├── scripts/build_routes.py      # rebuilds routes.csv from public sources
+├── scripts/build_dashboard.py   # generates the Grafana dashboard JSON
 ├── producer/producer.py         # adsb.lol → Kafka
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts

@@ -45,12 +45,20 @@ def load_routes():
         return {r["callsign"]: r for r in csv.DictReader(f)}
 
 
+class RateLimited(Exception):
+    def __init__(self, retry_after):
+        super().__init__(f"rate limited, retry after {retry_after}s")
+        self.retry_after = retry_after
+
+
 def fetch_area(session, name, lat, lon):
     t0 = time.time()
     try:
         resp = session.get(API.format(lat=lat, lon=lon, radius=250), timeout=20)
         api_latency.labels(name).observe(time.time() - t0)
         api_requests.labels(name, str(resp.status_code)).inc()
+        if resp.status_code == 429:
+            raise RateLimited(int(resp.headers.get("Retry-After", "30")))
         resp.raise_for_status()
         body = resp.json()
         return body.get("now", time.time() * 1000) / 1000, time.time(), body.get("ac", [])
@@ -82,6 +90,8 @@ def to_message(ac, api_now, fetched_at, area, routes):
         "destination": route.get("destination"),
         "destination_city": route.get("destination_city"),
         "destination_country": route.get("destination_country"),
+        "destination_lat": float(route["destination_lat"]) if route.get("destination_lat") else None,
+        "destination_lon": float(route["destination_lon"]) if route.get("destination_lon") else None,
         "position_ts": api_now - seen_pos if seen_pos is not None else None,
         "fetched_at": fetched_at,
         "source": "adsb.lol",
@@ -100,6 +110,7 @@ def main():
     producer = Producer({"bootstrap.servers": KAFKA, "acks": "all", "linger.ms": 50})
     session = requests.Session()
     session.headers["User-Agent"] = USER_AGENT
+    spacing = POLL_SECONDS / len(AREAS)
     print(f"tracking {AIRLINE_PREFIX}* flights in {len(AREAS)} areas every {POLL_SECONDS}s "
           f"({len(routes)} known routes)", flush=True)
 
@@ -107,7 +118,12 @@ def main():
         started = time.time()
         latest, total = {}, 0
         for name, lat, lon in AREAS:
-            api_now, fetched_at, aircraft = fetch_area(session, name, lat, lon)
+            try:
+                api_now, fetched_at, aircraft = fetch_area(session, name, lat, lon)
+            except RateLimited as e:
+                print(f"{name}: {e}", flush=True)
+                time.sleep(e.retry_after)
+                continue
             total += len(aircraft)
             for ac in aircraft:
                 if not (ac.get("flight") or "").startswith(AIRLINE_PREFIX):
@@ -116,7 +132,7 @@ def main():
                 prev = latest.get(ac.get("hex"))
                 if prev is None or ac.get("seen_pos", 1e9) < prev[0].get("seen_pos", 1e9):
                     latest[ac.get("hex")] = (ac, api_now, fetched_at, name)
-            time.sleep(1)  # be polite to a free API
+            time.sleep(spacing)  # spread requests evenly over the poll interval
 
         for ac, api_now, fetched_at, area in latest.values():
             msg = to_message(ac, api_now, fetched_at, area, routes)

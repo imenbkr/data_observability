@@ -3,6 +3,7 @@ for the five pillars of data observability (volume, freshness, schema, distribut
 plus the live position of every flight for the Grafana map.
 """
 import json
+import math
 import os
 import time
 
@@ -14,7 +15,16 @@ TOPIC = os.getenv("TOPIC", "nouvelair.positions")
 ACTIVE_WINDOW = int(os.getenv("ACTIVE_WINDOW_SECONDS", "600"))
 
 REQUIRED = ["hex", "callsign", "lat", "lon", "altitude_ft", "position_ts", "fetched_at"]
-FLIGHT_LABELS = ["callsign", "registration", "aircraft_type", "route"]
+FLIGHT_LABELS = ["flight", "origin", "destination", "aircraft", "registration"]
+
+# ICAO type designators -> readable names (Nouvelair fleet and common charter types)
+AIRCRAFT_NAMES = {
+    "A319": "Airbus A319", "A320": "Airbus A320", "A20N": "Airbus A320neo",
+    "A321": "Airbus A321", "A21N": "Airbus A321neo", "A332": "Airbus A330-200",
+    "B737": "Boeing 737-700", "B738": "Boeing 737-800", "B38M": "Boeing 737 MAX 8",
+}
+# Flight phase, shown with value mappings in Grafana
+ON_GROUND, CLIMBING, CRUISING, DESCENDING = 0, 1, 2, 3
 
 # Volume
 messages = Counter("nouvelair_messages_total", "Messages consumed")
@@ -37,17 +47,46 @@ unknown_route = Counter("nouvelair_unknown_route_total", "Valid positions whose 
 # Distribution
 by_destination = Gauge("nouvelair_active_flights_by_destination", "Active flights per destination country",
                        ["destination_country"])
-by_type = Gauge("nouvelair_active_flights_by_type", "Active flights per aircraft type", ["aircraft_type"])
+by_type = Gauge("nouvelair_active_flights_by_type", "Active flights per aircraft type", ["aircraft"])
 altitude = Histogram("nouvelair_altitude_feet", "Reported altitude of airborne aircraft",
                      buckets=[1000, 5000, 10000, 20000, 30000, 35000, 40000])
-# Map
-lat_g = Gauge("nouvelair_flight_latitude", "Last latitude", FLIGHT_LABELS)
-lon_g = Gauge("nouvelair_flight_longitude", "Last longitude", FLIGHT_LABELS)
-alt_g = Gauge("nouvelair_flight_altitude_feet", "Last altitude (0 = on ground)", FLIGHT_LABELS)
-gs_g = Gauge("nouvelair_flight_ground_speed_knots", "Last ground speed", FLIGHT_LABELS)
-track_g = Gauge("nouvelair_flight_track_degrees", "Last track (heading over ground)", FLIGHT_LABELS)
+# Live flights (map + table): one gauge per attribute, all with the same flight labels
+FLIGHT_GAUGES = {name: Gauge(f"nouvelair_flight_{name}", doc, FLIGHT_LABELS) for name, doc in [
+    ("latitude", "Last latitude"),
+    ("longitude", "Last longitude"),
+    ("altitude_feet", "Last altitude (0 = on ground)"),
+    ("speed_kmh", "Last ground speed in km/h"),
+    ("heading_degrees", "Last direction of travel"),
+    ("phase", "0 on ground, 1 climbing, 2 cruising, 3 descending"),
+    ("distance_left_km", "Straight-line distance to the destination airport"),
+    ("eta_timestamp_ms", "Estimated arrival (distance left / current speed)"),
+    ("tracked_since_timestamp_ms", "When this flight was first seen"),
+    ("last_update_timestamp_ms", "Time of the last received position"),
+]}
 
-flights = {}  # hex -> {"seen": ts, "labels": tuple, "country": str, "type": str, "fields": int, "shape": frozenset}
+flights = {}  # hex -> {"seen", "first_seen", "labels", "country", "type", "fields", "shape"}
+
+
+def place(city, code):
+    return f"{city} ({code})" if city else (code or "Unknown")
+
+
+def distance_km(lat1, lon1, lat2, lon2):
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(a))
+
+
+def phase(rec):
+    if rec["altitude_ft"] == "ground":
+        return ON_GROUND
+    rate = rec.get("vertical_rate_fpm") or 0
+    if rate > 500:
+        return CLIMBING
+    if rate < -500:
+        return DESCENDING
+    return CRUISING
 
 
 def check(msg):
@@ -77,33 +116,52 @@ def record(rec, kafka_ts):
 
     if not rec.get("destination"):
         unknown_route.inc()
-    route = f"{rec.get('origin') or '?'} → {rec.get('destination') or '?'}"
-    labels = (rec["callsign"], rec.get("registration") or "?", rec.get("aircraft_type") or "?", route)
+    aircraft = AIRCRAFT_NAMES.get(rec.get("aircraft_type"), rec.get("aircraft_type") or "Unknown")
+    labels = (rec["callsign"],
+              place(rec.get("origin_city"), rec.get("origin")),
+              place(rec.get("destination_city"), rec.get("destination")),
+              aircraft, rec.get("registration") or "Unknown")
     old = flights.get(rec["hex"])
     if old and old["labels"] != labels:
         remove_flight(old)  # callsign changed: new leg for this aircraft
+        old = None
 
     on_ground = rec["altitude_ft"] == "ground"
     alt = 0 if on_ground else rec["altitude_ft"]
     if not on_ground:
         altitude.observe(alt)
-    lat_g.labels(*labels).set(rec["lat"])
-    lon_g.labels(*labels).set(rec["lon"])
-    alt_g.labels(*labels).set(alt)
-    gs_g.labels(*labels).set(rec.get("ground_speed_kt") or 0)
-    track_g.labels(*labels).set(rec.get("track_deg") or 0)
+    speed_kmh = (rec.get("ground_speed_kt") or 0) * 1.852
+    values = {
+        "latitude": rec["lat"],
+        "longitude": rec["lon"],
+        "altitude_feet": alt,
+        "speed_kmh": speed_kmh,
+        "heading_degrees": rec.get("track_deg") or 0,
+        "phase": phase(rec),
+        "tracked_since_timestamp_ms": (old["first_seen"] if old else rec["position_ts"]) * 1000,
+        "last_update_timestamp_ms": rec["position_ts"] * 1000,
+    }
+    dest_lat, dest_lon = rec.get("destination_lat"), rec.get("destination_lon")
+    if dest_lat is not None and dest_lon is not None:
+        left = distance_km(rec["lat"], rec["lon"], dest_lat, dest_lon)
+        values["distance_left_km"] = left
+        if speed_kmh > 100:
+            values["eta_timestamp_ms"] = (rec["position_ts"] + left / speed_kmh * 3600) * 1000
+    for name, gauge in FLIGHT_GAUGES.items():
+        if name in values:
+            gauge.labels(*labels).set(values[name])
 
     flights[rec["hex"]] = {
-        "seen": now, "labels": labels,
+        "seen": now, "first_seen": old["first_seen"] if old else rec["position_ts"], "labels": labels,
         "country": rec.get("destination_country") or "Unknown",
-        "type": rec.get("aircraft_type") or "Unknown",
+        "type": aircraft,
         "fields": rec.get("raw_field_count", 0),
         "shape": frozenset(rec),
     }
 
 
 def remove_flight(f):
-    for g in (lat_g, lon_g, alt_g, gs_g, track_g):
+    for g in FLIGHT_GAUGES.values():
         try:
             g.remove(*f["labels"])
         except KeyError:
