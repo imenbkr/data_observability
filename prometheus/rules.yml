@@ -1,0 +1,46 @@
+groups:
+  - name: data-observability
+    interval: 1m
+    rules:
+      # --- Volume ---
+      - record: etl:records:rate5m
+        expr: sum(rate(etl_records_total[5m]))
+      - record: producer:records:rate5m
+        expr: sum(rate(producer_records_sent_total[5m]))
+      # One-step-ahead prediction band: mean +/- 1.645 sd (~90% coverage) of the last hour,
+      # excluding the most recent 5 minutes. With weekly seasonality, use [2w] offset 1w instead.
+      - record: etl:records:lower_bound
+        expr: |
+          clamp_min(
+            avg_over_time(etl:records:rate5m[1h] offset 5m)
+            - 1.645 * stddev_over_time(etl:records:rate5m[1h] offset 5m), 0)
+      - record: etl:records:upper_bound
+        expr: |
+          avg_over_time(etl:records:rate5m[1h] offset 5m)
+          + 1.645 * stddev_over_time(etl:records:rate5m[1h] offset 5m)
+
+      # --- Completeness (volume in vs. volume out, a lineage signal) ---
+      - record: etl:completeness:ratio5m
+        expr: |
+          (etl:records:rate5m + sum(rate(etl_invalid_records_total[5m])))
+          / producer:records:rate5m
+
+      # --- Freshness ---
+      - record: etl:lag:p50
+        expr: histogram_quantile(0.50, sum by (le) (rate(etl_record_lag_seconds_bucket[5m])))
+      - record: etl:lag:p95
+        expr: histogram_quantile(0.95, sum by (le) (rate(etl_record_lag_seconds_bucket[5m])))
+      - record: etl:consumer_lag:messages
+        expr: sum(kafka_consumergroup_lag{consumergroup="plant-etl", topic="plant.events"})
+
+      # --- Schema ---
+      - record: etl:invalid:ratio5m
+        expr: |
+          sum(rate(etl_invalid_records_total[5m]))
+          / (sum(rate(etl_invalid_records_total[5m])) + etl:records:rate5m)
+
+      # --- Distribution ---
+      - record: etl:records:share_by_host:1h
+        expr: |
+          sum by (host) (rate(etl_records_total[1h]))
+          / ignoring(host) group_left sum(rate(etl_records_total[1h])) * 100

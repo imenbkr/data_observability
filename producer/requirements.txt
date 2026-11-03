@@ -1,0 +1,2 @@
+confluent-kafka==2.6.1
+prometheus_client==0.21.1

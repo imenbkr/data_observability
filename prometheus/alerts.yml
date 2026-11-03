@@ -1,0 +1,64 @@
+groups:
+  - name: data-observability-alerts
+    rules:
+      - alert: DataVolumeBelowForecast
+        expr: etl:records:rate5m < etl:records:lower_bound
+        for: 2m
+        labels: { pillar: volume, team: data-engineering, severity: page }
+        annotations:
+          summary: "Loaded volume {{ $value | humanize }}/s is below the forecast band"
+
+      - alert: DataVolumeAboveForecast
+        expr: etl:records:rate5m > etl:records:upper_bound
+        for: 5m
+        labels: { pillar: volume, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Loaded volume is above the forecast band (replay or duplicate load?)"
+
+      - alert: PipelineStalled
+        expr: time() - max(etl_last_success_timestamp_seconds) > 120
+        labels: { pillar: freshness, team: data-engineering, severity: page }
+        annotations:
+          summary: "No batch committed to the lake for {{ $value | humanizeDuration }}"
+
+      - alert: DataFreshnessDegraded
+        expr: etl:lag:p95 > 120
+        for: 5m
+        labels: { pillar: freshness, team: data-engineering, severity: warning }
+        annotations:
+          summary: "p95 record lag is {{ $value | humanizeDuration }}"
+
+      - alert: ConsumerLagGrowing
+        expr: etl:consumer_lag:messages > 100000 and deriv(etl:consumer_lag:messages[5m]) > 0
+        for: 5m
+        labels: { pillar: freshness, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Consumer group plant-etl is {{ $value | humanize }} messages behind and falling further"
+
+      - alert: SchemaViolations
+        expr: etl:invalid:ratio5m > 0.005
+        for: 5m
+        labels: { pillar: schema, team: data-engineering, severity: warning }
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of records rejected to the DLQ"
+
+      - alert: SchemaFieldCountChanged
+        expr: min(etl_fields_per_record{stat="min"}) < 5 or max(etl_fields_per_record{stat="max"}) > 6
+        for: 2m
+        labels: { pillar: schema, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Records with an unexpected number of fields are being loaded"
+
+      - alert: HostCardinalityChanged
+        expr: count(sum by (host) (rate(etl_records_total[15m])) > 0) != 50
+        for: 10m
+        labels: { pillar: distribution, team: data-engineering, severity: warning }
+        annotations:
+          summary: "{{ $value }} hosts are sending data (expected 50)"
+
+      - alert: DataLoss
+        expr: etl:completeness:ratio5m < 0.98
+        for: 10m
+        labels: { pillar: lineage, team: data-engineering, severity: page }
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of produced records reach the lake"

@@ -1,0 +1,6 @@
+.env
+.localstack/
+__pycache__/
+*.pyc
+.venv/
+*.pdf
