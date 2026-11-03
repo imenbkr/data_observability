@@ -586,14 +586,14 @@
       "title": "",
       "transparent": true,
       "gridPos": {
-        "h": 8,
+        "h": 6,
         "w": 24,
         "x": 0,
         "y": 155
       },
       "options": {
         "mode": "markdown",
-        "content": "```yaml\n- alert: FlightVolumeBelowForecast\n  expr: |\n    flights:positions:count1h < flights:positions:lower_bound\n    and on() flights:positions:count1h offset 1d > 100\n  for: 10m\n  labels: { pillar: volume, team: data-engineering, severity: warning }\n  annotations:\n    summary: \"Only {{ $value | humanize }} flight positions in the last hour, below the forecast's lower bound\"\n```"
+        "content": "<pre><code>- alert: FlightVolumeBelowForecast\n  expr: |\n    flights:positions:count1h &lt; flights:positions:lower_bound\n    and on() flights:positions:count1h offset 1d &gt; 100\n  for: 10m\n  labels: &#123; pillar: volume, team: data-engineering, severity: warning &#125;\n  annotations:\n    summary: &quot;Only &#123;&#123; $value | humanize &#125;&#125; flight positions in the last hour, below the forecast&#x27;s lower bound&quot;</code></pre>"
       }
     },
     {
@@ -609,7 +609,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 163
+        "y": 161
       },
       "targets": [
         {
@@ -657,7 +657,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 172
+        "y": 170
       },
       "options": {
         "mode": "markdown",
@@ -673,7 +673,7 @@
         "h": 22,
         "w": 24,
         "x": 0,
-        "y": 177
+        "y": 175
       },
       "options": {
         "mode": "markdown",
@@ -693,7 +693,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 199
+        "y": 197
       },
       "targets": [
         {
@@ -751,7 +751,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 208
+        "y": 206
       },
       "options": {
         "mode": "markdown",
@@ -767,7 +767,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 216
+        "y": 214
       },
       "options": {
         "mode": "markdown",
@@ -783,7 +783,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 221
+        "y": 219
       },
       "options": {
         "mode": "markdown",
@@ -803,7 +803,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 228
+        "y": 226
       },
       "targets": [
         {
@@ -951,7 +951,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 237
+        "y": 235
       },
       "options": {
         "mode": "markdown",
@@ -967,7 +967,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 242
+        "y": 240
       },
       "options": {
         "mode": "markdown",
@@ -987,7 +987,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 245
+        "y": 243
       },
       "targets": [
         {
@@ -1071,7 +1071,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 254
+        "y": 252
       },
       "options": {
         "mode": "markdown",
@@ -1087,7 +1087,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 263
+        "y": 261
       },
       "options": {
         "mode": "markdown",
@@ -1107,7 +1107,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 275
+        "y": 273
       },
       "targets": [
         {
@@ -1255,7 +1255,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 284
+        "y": 282
       },
       "options": {
         "mode": "markdown",
@@ -1271,7 +1271,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 287
+        "y": 285
       },
       "options": {
         "mode": "markdown",
@@ -1287,7 +1287,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 292
+        "y": 290
       },
       "options": {
         "mode": "markdown",

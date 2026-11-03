@@ -7,6 +7,7 @@ content: markdown and code cells become text panels, panel cells become dashboar
 Usage: python scripts/build_notebook.py && python scripts/build_forecast_dashboard.py
 """
 import base64
+import html
 import io
 import json
 import math
@@ -40,6 +41,18 @@ def text_height(text):
     return max(2, math.ceil(lines * 0.62 + headings * 0.7) + 1)
 
 
+def code_block(language, code):
+    """Fenced code block, or HTML <pre> when the code contains {{ … }}.
+
+    Recent Grafana versions run text panels through a template engine that fails on
+    {{ $value }} (alert annotation templates). Encoded braces display the same but aren't parsed.
+    """
+    if "{{" not in code:
+        return f"```{language}\n{code}\n```"
+    escaped = html.escape(code).replace("{", "&#123;").replace("}", "&#125;")
+    return f"<pre><code>{escaped}</code></pre>"
+
+
 def datasource(uid):
     return ML_DS if uid == "__ML_DATASOURCE_UID__" else DS
 
@@ -55,7 +68,7 @@ def convert(notebook):
             if content["kind"] == "Markdown":
                 text = content["spec"]["text"]
             else:  # Code cell → fenced code block
-                text = f"```{content['spec']['language']}\n{content['spec']['code']}\n```"
+                text = code_block(content["spec"]["language"], content["spec"]["code"])
             h = text_height(text)
             panels.append({"type": "text", "id": pid, "title": "", "transparent": True,
                            "gridPos": {"h": h, "w": 24, "x": 0, "y": y},
