@@ -15,12 +15,12 @@ ps:       ## Show service status
 logs:     ## Follow producer and consumer logs
 	docker compose logs -f producer consumer
 
-flights:  ## Show the Nouvelair flights found in the latest polls
+flights:  ## Show the Tunisia flights found in the latest polls
 	docker compose logs producer | grep 'poll:' | tail -5
 
 topic:    ## Read the 3 latest messages from Kafka
 	docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
-	  --topic nouvelair.positions --max-messages 3 --from-beginning --timeout-ms 10000
+	  --topic tunisia.flights --max-messages 3 --from-beginning --timeout-ms 10000
 
 routes:   ## Refresh data/routes.csv from public sources, then restart the producer
 	python3 scripts/build_routes.py && docker compose restart producer

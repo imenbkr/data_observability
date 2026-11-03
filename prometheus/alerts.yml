@@ -1,12 +1,12 @@
 groups:
-  - name: nouvelair-data-observability-alerts
+  - name: flights-data-observability-alerts
     rules:
       - alert: NoFlightsWhileExpected
-        expr: nouvelair_active_flights == 0 and nouvelair:active_flights:yesterday >= 3
+        expr: flights_active == 0 and flights:active:yesterday >= 3
         for: 30m
         labels: { pillar: volume, team: data-engineering, severity: page }
         annotations:
-          summary: "No Nouvelair flights tracked, but {{ $value }} were airborne at this time yesterday"
+          summary: "No Tunisia flights tracked, but {{ $value }} were airborne at this time yesterday"
 
       - alert: SourceApiFailing
         expr: adsb:api_errors:ratio > 0.2
@@ -22,28 +22,28 @@ groups:
           summary: "The producer has not completed a poll for {{ $value | humanizeDuration }}"
 
       - alert: PositionsStale
-        expr: nouvelair:position_age:p95 > 180
+        expr: flights:position_age:p95 > 180
         for: 15m
         labels: { pillar: freshness, team: data-engineering, severity: warning }
         annotations:
           summary: "p95 position age is {{ $value | humanizeDuration }}"
 
       - alert: InvalidMessages
-        expr: nouvelair:invalid:ratio > 0.05
+        expr: flights:invalid:ratio > 0.05
         for: 15m
         labels: { pillar: schema, team: data-engineering, severity: warning }
         annotations:
           summary: "{{ $value | humanizePercentage }} of messages fail validation"
 
       - alert: RouteReferenceDataOutdated
-        expr: nouvelair:unknown_route:ratio > 0.2
+        expr: flights:unknown_route:ratio > 0.2
         for: 1h
         labels: { pillar: distribution, team: data-engineering, severity: info }
         annotations:
           summary: "{{ $value | humanizePercentage }} of positions have no known route: run scripts/build_routes.py"
 
       - alert: MessagesLostInPipeline
-        expr: nouvelair:completeness:ratio < 0.95 and sum(rate(producer_messages_sent_total[10m])) > 0
+        expr: flights:completeness:ratio < 0.95 and sum(rate(producer_messages_sent_total[10m])) > 0
         for: 15m
         labels: { pillar: lineage, team: data-engineering, severity: warning }
         annotations:

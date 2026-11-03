@@ -1,35 +1,35 @@
 groups:
-  - name: nouvelair-data-observability
+  - name: flights-data-observability
     interval: 1m
     rules:
       # Volume
-      - record: nouvelair:messages:per_minute
-        expr: sum(rate(nouvelair_messages_total[5m])) * 60
-      - record: nouvelair:active_flights:yesterday
-        expr: nouvelair_active_flights offset 1d
+      - record: flights:messages:per_minute
+        expr: sum(rate(flights_messages_total[5m])) * 60
+      - record: flights:active:yesterday
+        expr: flights_active offset 1d
 
       # Freshness
-      - record: nouvelair:position_age:p50
-        expr: histogram_quantile(0.50, sum by (le) (rate(nouvelair_position_age_seconds_bucket[10m])))
-      - record: nouvelair:position_age:p95
-        expr: histogram_quantile(0.95, sum by (le) (rate(nouvelair_position_age_seconds_bucket[10m])))
-      - record: nouvelair:stage_latency:p95
-        expr: histogram_quantile(0.95, sum by (le, stage) (rate(nouvelair_stage_latency_seconds_bucket[10m])))
+      - record: flights:position_age:p50
+        expr: histogram_quantile(0.50, sum by (le) (rate(flights_position_age_seconds_bucket[10m])))
+      - record: flights:position_age:p95
+        expr: histogram_quantile(0.95, sum by (le) (rate(flights_position_age_seconds_bucket[10m])))
+      - record: flights:stage_latency:p95
+        expr: histogram_quantile(0.95, sum by (le, stage) (rate(flights_stage_latency_seconds_bucket[10m])))
 
       # Schema / validity
-      - record: nouvelair:invalid:ratio
+      - record: flights:invalid:ratio
         expr: |
-          sum(rate(nouvelair_invalid_messages_total[30m]))
-          / clamp_min(sum(rate(nouvelair_messages_total[30m])), 1e-9)
-      - record: nouvelair:unknown_route:ratio
+          sum(rate(flights_invalid_messages_total[30m]))
+          / clamp_min(sum(rate(flights_messages_total[30m])), 1e-9)
+      - record: flights:unknown_route:ratio
         expr: |
-          sum(rate(nouvelair_unknown_route_total[1h]))
-          / clamp_min(sum(rate(nouvelair_valid_positions_total[1h])), 1e-9)
+          sum(rate(flights_unknown_route_total[1h]))
+          / clamp_min(sum(rate(flights_valid_positions_total[1h])), 1e-9)
 
       # Lineage: does every record found at the source make it through each stage?
-      - record: nouvelair:completeness:ratio
+      - record: flights:completeness:ratio
         expr: |
-          sum(rate(nouvelair_messages_total[10m]))
+          sum(rate(flights_messages_total[10m]))
           / clamp_min(sum(rate(producer_messages_sent_total[10m])), 1e-9)
       - record: adsb:api_errors:ratio
         expr: |

@@ -1,4 +1,4 @@
-name: nouvelair-data-observability
+name: tunisia-flights-data-observability
 
 services:
   # Single-node Kafka in KRaft mode (no ZooKeeper)
@@ -31,17 +31,17 @@ services:
     depends_on: { kafka: { condition: service_healthy } }
     ports: ["8080:8080"]
     environment:
-      KAFKA_CLUSTERS_0_NAME: nouvelair
+      KAFKA_CLUSTERS_0_NAME: tunisia-flights
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
-  # Polls live ADS-B data (adsb.lol) and publishes Nouvelair flights to Kafka
+  # Polls live ADS-B data (adsb.lol) and publishes flights to and from Tunisia to Kafka
   producer:
     build: ./producer
     restart: unless-stopped
     depends_on: { kafka: { condition: service_healthy } }
     environment:
       POLL_SECONDS: ${POLL_SECONDS:-60}
-      USER_AGENT: ${USER_AGENT:-nouvelair-data-observability-demo}
+      USER_AGENT: ${USER_AGENT:-tunisia-flights-data-observability-demo}
     volumes: [./data:/app/data:ro]
 
   # Checks data quality and exposes the five-pillar metrics
@@ -70,7 +70,7 @@ services:
       GF_FEATURE_TOGGLES_ENABLE: dashboard.notebooks
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/nouvelair.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tunisia-flights.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

@@ -1,4 +1,4 @@
-"""Consumes Nouvelair positions from Kafka, checks their quality and exposes metrics
+"""Consumes positions of flights to and from Tunisia from Kafka, checks their quality and exposes metrics
 for the five pillars of data observability (volume, freshness, schema, distribution, lineage),
 plus the live position of every flight for the Grafana map.
 """
@@ -11,47 +11,55 @@ from confluent_kafka import Consumer
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 KAFKA = os.getenv("KAFKA", "kafka:9092")
-TOPIC = os.getenv("TOPIC", "nouvelair.positions")
+TOPIC = os.getenv("TOPIC", "tunisia.flights")
 ACTIVE_WINDOW = int(os.getenv("ACTIVE_WINDOW_SECONDS", "600"))
 
 REQUIRED = ["hex", "callsign", "lat", "lon", "altitude_ft", "position_ts", "fetched_at"]
-FLIGHT_LABELS = ["flight", "origin", "destination", "aircraft", "registration"]
+FLIGHT_LABELS = ["flight", "airline", "direction", "origin", "destination", "aircraft", "registration"]
 
-# ICAO type designators -> readable names (Nouvelair fleet and common charter types)
+# ICAO type designators -> readable names (types commonly seen on Tunisia routes)
 AIRCRAFT_NAMES = {
     "A319": "Airbus A319", "A320": "Airbus A320", "A20N": "Airbus A320neo",
     "A321": "Airbus A321", "A21N": "Airbus A321neo", "A332": "Airbus A330-200",
-    "B737": "Boeing 737-700", "B738": "Boeing 737-800", "B38M": "Boeing 737 MAX 8",
+    "A333": "Airbus A330-300", "A339": "Airbus A330-900neo", "A359": "Airbus A350-900",
+    "BCS3": "Airbus A220-300", "B737": "Boeing 737-700", "B738": "Boeing 737-800",
+    "B739": "Boeing 737-900", "B38M": "Boeing 737 MAX 8", "B39M": "Boeing 737 MAX 9",
+    "B752": "Boeing 757-200", "B763": "Boeing 767-300", "B788": "Boeing 787-8",
+    "B789": "Boeing 787-9", "B77W": "Boeing 777-300ER", "E190": "Embraer E190",
+    "E195": "Embraer E195", "E295": "Embraer E195-E2", "CRJ9": "Bombardier CRJ900",
+    "AT75": "ATR 72-500", "AT76": "ATR 72-600", "DH8D": "Dash 8-400",
 }
 # Flight phase, shown with value mappings in Grafana
 ON_GROUND, CLIMBING, CRUISING, DESCENDING = 0, 1, 2, 3
 
 # Volume
-messages = Counter("nouvelair_messages_total", "Messages consumed")
-valid = Counter("nouvelair_valid_positions_total", "Messages that passed all checks")
-active = Gauge("nouvelair_active_flights", "Flights seen in the active window")
+messages = Counter("flights_messages_total", "Messages consumed")
+valid = Counter("flights_valid_positions_total", "Messages that passed all checks")
+active = Gauge("flights_active", "Flights seen in the active window")
 # Freshness
-position_age = Histogram("nouvelair_position_age_seconds", "Age of a position when it reaches the consumer",
+position_age = Histogram("flights_position_age_seconds", "Age of a position when it reaches the consumer",
                          buckets=[5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600])
-stage_latency = Histogram("nouvelair_stage_latency_seconds", "Latency per pipeline stage", ["stage"],
+stage_latency = Histogram("flights_stage_latency_seconds", "Latency per pipeline stage", ["stage"],
                           buckets=[0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120])
-last_message = Gauge("nouvelair_last_message_timestamp_seconds", "Unix time of the last consumed message")
+last_message = Gauge("flights_last_message_timestamp_seconds", "Unix time of the last consumed message")
 # Schema
-invalid = Counter("nouvelair_invalid_messages_total", "Rejected messages", ["reason"])
-REASONS = ["invalid_json", "missing_field", "missing_position", "bad_altitude", "out_of_range", "wrong_airline"]
+invalid = Counter("flights_invalid_messages_total", "Rejected messages", ["reason"])
+REASONS = ["invalid_json", "missing_field", "missing_position", "bad_altitude", "out_of_range", "missing_callsign"]
 for _r in REASONS:
     invalid.labels(_r)  # export every reason at 0 so ratios work before the first rejection
-raw_fields = Gauge("nouvelair_raw_field_count", "Fields per raw ADS-B record in the active window", ["stat"])
-schema_variants = Gauge("nouvelair_schema_variants", "Distinct message shapes in the active window")
-unknown_route = Counter("nouvelair_unknown_route_total", "Valid positions whose callsign has no known route")
+raw_fields = Gauge("flights_raw_field_count", "Fields per raw ADS-B record in the active window", ["stat"])
+schema_variants = Gauge("flights_schema_variants", "Distinct message shapes in the active window")
+unknown_route = Counter("flights_unknown_route_total", "Valid positions whose callsign has no known route")
 # Distribution
-by_destination = Gauge("nouvelair_active_flights_by_destination", "Active flights per destination country",
-                       ["destination_country"])
-by_type = Gauge("nouvelair_active_flights_by_type", "Active flights per aircraft type", ["aircraft"])
-altitude = Histogram("nouvelair_altitude_feet", "Reported altitude of airborne aircraft",
+by_country = Gauge("flights_active_by_country", "Active flights per country at the other end of the route",
+                   ["country"])
+by_airline = Gauge("flights_active_by_airline", "Active flights per airline", ["airline"])
+by_direction = Gauge("flights_active_by_direction", "Active flights per direction", ["direction"])
+by_type = Gauge("flights_active_by_type", "Active flights per aircraft type", ["aircraft"])
+altitude = Histogram("flights_altitude_feet", "Reported altitude of airborne aircraft",
                      buckets=[1000, 5000, 10000, 20000, 30000, 35000, 40000])
 # Live flights (map + table): one gauge per attribute, all with the same flight labels
-FLIGHT_GAUGES = {name: Gauge(f"nouvelair_flight_{name}", doc, FLIGHT_LABELS) for name, doc in [
+FLIGHT_GAUGES = {name: Gauge(f"flight_{name}", doc, FLIGHT_LABELS) for name, doc in [
     ("latitude", "Last latitude"),
     ("longitude", "Last longitude"),
     ("altitude_feet", "Last altitude (0 = on ground)"),
@@ -64,7 +72,7 @@ FLIGHT_GAUGES = {name: Gauge(f"nouvelair_flight_{name}", doc, FLIGHT_LABELS) for
     ("last_update_timestamp_ms", "Time of the last received position"),
 ]}
 
-flights = {}  # hex -> {"seen", "first_seen", "labels", "country", "type", "fields", "shape"}
+flights = {}  # hex -> {"seen", "first_seen", "labels", "country", "airline", "direction", "type", "fields", "shape"}
 
 
 def place(city, code):
@@ -102,8 +110,8 @@ def check(msg):
         return None, "bad_altitude"
     if not (-90 <= rec["lat"] <= 90 and -180 <= rec["lon"] <= 180):
         return None, "out_of_range"
-    if not rec["callsign"].startswith("LBT"):
-        return None, "wrong_airline"
+    if not rec["callsign"].strip():
+        return None, "missing_callsign"
     return rec, None
 
 
@@ -117,7 +125,9 @@ def record(rec, kafka_ts):
     if not rec.get("destination"):
         unknown_route.inc()
     aircraft = AIRCRAFT_NAMES.get(rec.get("aircraft_type"), rec.get("aircraft_type") or "Unknown")
-    labels = (rec["callsign"],
+    airline = rec.get("airline") or rec.get("airline_code") or "Unknown"
+    direction = rec.get("direction") or "Unknown"
+    labels = (rec["callsign"], airline, direction,
               place(rec.get("origin_city"), rec.get("origin")),
               place(rec.get("destination_city"), rec.get("destination")),
               aircraft, rec.get("registration") or "Unknown")
@@ -153,7 +163,9 @@ def record(rec, kafka_ts):
 
     flights[rec["hex"]] = {
         "seen": now, "first_seen": old["first_seen"] if old else rec["position_ts"], "labels": labels,
-        "country": rec.get("destination_country") or "Unknown",
+        # the "other end" of the route, seen from Tunisia
+        "country": (rec.get("origin_country") if direction == "Arrival" else rec.get("destination_country")) or "Unknown",
+        "airline": airline, "direction": direction,
         "type": aircraft,
         "fields": rec.get("raw_field_count", 0),
         "shape": frozenset(rec),
@@ -176,10 +188,12 @@ def refresh_window():
             del flights[hex_]
     live = list(flights.values())
     active.set(len(live))
-    by_destination.clear()
-    by_type.clear()
+    for g in (by_country, by_airline, by_direction, by_type):
+        g.clear()
     for f in live:
-        by_destination.labels(f["country"]).inc()
+        by_country.labels(f["country"]).inc()
+        by_airline.labels(f["airline"]).inc()
+        by_direction.labels(f["direction"]).inc()
         by_type.labels(f["type"]).inc()
     if live:
         raw_fields.labels("min").set(min(f["fields"] for f in live))
@@ -189,7 +203,7 @@ def refresh_window():
 
 def main():
     start_http_server(8000)
-    consumer = Consumer({"bootstrap.servers": KAFKA, "group.id": "nouvelair-quality",
+    consumer = Consumer({"bootstrap.servers": KAFKA, "group.id": "flight-quality",
                          "auto.offset.reset": "earliest"})
     consumer.subscribe([TOPIC])
     print(f"consuming {TOPIC}", flush=True)

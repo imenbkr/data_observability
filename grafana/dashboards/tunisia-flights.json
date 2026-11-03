@@ -1,11 +1,72 @@
 {
-  "uid": "nouvelair",
-  "title": "Nouvelair · Data Observability",
+  "uid": "tunisia-flights",
+  "title": "Tunisia Flights · Data Observability",
   "tags": [
     "data-observability",
     "kafka",
-    "nouvelair"
+    "flights",
+    "tunisia"
   ],
+  "templating": {
+    "list": [
+      {
+        "name": "airline",
+        "label": "Airline",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prom"
+        },
+        "query": {
+          "query": "label_values(flight_phase, airline)",
+          "refId": "var"
+        },
+        "definition": "label_values(flight_phase, airline)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "direction",
+        "label": "Direction",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prom"
+        },
+        "query": {
+          "query": "label_values(flight_phase, direction)",
+          "refId": "var"
+        },
+        "definition": "label_values(flight_phase, direction)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
   "timezone": "browser",
   "refresh": "1m",
   "time": {
@@ -21,33 +82,33 @@
       "title": "How to read this dashboard",
       "id": 1,
       "gridPos": {
-        "h": 6,
+        "h": 8,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "options": {
         "mode": "markdown",
-        "content": "\n**What you see:** every **Nouvelair** plane flying right now between Tunisia and Europe, updated every minute.\n\n**Where the data comes from:** aircraft broadcast their position by radio (called **ADS-B**).\nThousands of volunteers run small receivers that pick up these signals and share them through\n**adsb.lol**, a free public flight-tracking network. Our pipeline asks adsb.lol every 60 seconds\nfor planes over Tunisia and Europe, keeps the Nouvelair ones (flight numbers starting with **LBT**),\nadds the route (e.g. *Paris → Tunis*), sends them through **Kafka** and checks their quality.\n\n**The rows below** answer five questions about the data: *Is enough arriving? Is it recent?\nIs its format correct? Do the values look normal? Does everything make it through the pipeline?*\nTimes are shown in your browser's time zone. *Estimated arrival* is based on the straight-line\ndistance and current speed, so treat it as an approximation.\n"
+        "content": "\n**What you see:** every plane flying **to, from or within Tunisia** right now (Tunisair, Nouvelair, Transavia,\neasyJet, TUI, Air France and 120+ other airlines), updated every minute. Use the **Airline** and **Direction**\nfilters at the top to focus, e.g. on Nouvelair arrivals only.\n\n**Where the data comes from:** aircraft broadcast their position by radio (called **ADS-B**).\nThousands of volunteers run small receivers that pick up these signals and share them through\n**adsb.lol**, a free public flight-tracking network. Our pipeline asks adsb.lol every 60 seconds\nfor planes over Tunisia, the Mediterranean and Europe, keeps the ones whose flight number is a known\nTunisia route (plus every Tunisair, Nouvelair and Tunisair Express plane), adds the route\n(e.g. *Paris → Tunis*), sends them through **Kafka** and checks their quality.\n\n**The rows below** answer five questions about the data: *Is enough arriving? Is it recent?\nIs its format correct? Do the values look normal? Does everything make it through the pipeline?*\nTimes are shown in your browser's time zone. *Estimated arrival* is based on the straight-line\ndistance and current speed, so treat it as an approximation.\n"
       }
     },
     {
       "type": "row",
-      "title": "Live · Nouvelair flights right now",
+      "title": "Live · Flights to and from Tunisia right now",
       "id": 2,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 8
       },
       "panels": []
     },
     {
       "type": "geomap",
       "title": "Map",
-      "description": "Each plane icon is a Nouvelair flight seen in the last 10 minutes. It points in its direction of travel; colour shows altitude. Hover for details.",
+      "description": "Each plane icon is a flight to or from Tunisia seen in the last 10 minutes. It points in its direction of travel; colour shows altitude. Hover for details.",
       "id": 3,
       "datasource": {
         "type": "prometheus",
@@ -57,7 +118,7 @@
         "h": 13,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -87,6 +148,55 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Arrival": {
+                        "text": "Arrival ↘",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Departure": {
+                        "text": "Departure ↗",
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "Domestic": {
+                        "text": "Domestic",
+                        "color": "purple",
+                        "index": 2
+                      },
+                      "Via Tunisia": {
+                        "text": "Via Tunisia",
+                        "color": "text",
+                        "index": 3
+                      },
+                      "Unknown": {
+                        "text": "Unknown",
+                        "color": "orange",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -201,7 +311,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "lengthkm"
+                "value": "suffix: km"
               },
               {
                 "id": "decimals",
@@ -217,7 +327,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocalNoDateIfToday"
+                "value": "time:HH:mm"
               }
             ]
           },
@@ -229,19 +339,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocalNoDateIfToday"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Last update"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dateTimeFromNow"
+                "value": "time:HH:mm"
               }
             ]
           }
@@ -254,7 +352,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_latitude)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_latitude{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -266,7 +364,7 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_longitude)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_longitude{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -278,7 +376,7 @@
             "uid": "prom"
           },
           "refId": "C",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_heading_degrees)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_heading_degrees{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -290,7 +388,7 @@
             "uid": "prom"
           },
           "refId": "D",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_phase)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_phase{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -302,7 +400,7 @@
             "uid": "prom"
           },
           "refId": "E",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_altitude_feet)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_altitude_feet{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -314,7 +412,7 @@
             "uid": "prom"
           },
           "refId": "F",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_speed_kmh)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_speed_kmh{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -326,7 +424,7 @@
             "uid": "prom"
           },
           "refId": "G",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_distance_left_km)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_distance_left_km{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -338,7 +436,7 @@
             "uid": "prom"
           },
           "refId": "H",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_eta_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_eta_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -350,7 +448,7 @@
             "uid": "prom"
           },
           "refId": "I",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_tracked_since_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_tracked_since_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -362,7 +460,7 @@
             "uid": "prom"
           },
           "refId": "J",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_last_update_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_last_update_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -465,24 +563,28 @@
               "Value #I": "Tracked since",
               "Value #J": "Last update",
               "flight": "Flight",
+              "airline": "Airline",
+              "direction": "Direction",
               "origin": "From",
               "destination": "To",
               "aircraft": "Aircraft",
               "registration": "Registration"
             },
             "indexByName": {
-              "Value #D": 3,
-              "Value #E": 5,
-              "Value #F": 6,
-              "Value #G": 7,
-              "Value #H": 8,
-              "Value #I": 9,
-              "Value #J": 10,
+              "Value #D": 5,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9,
+              "Value #H": 10,
+              "Value #I": 11,
+              "Value #J": 12,
               "flight": 0,
-              "origin": 1,
-              "destination": 2,
-              "aircraft": 4,
-              "registration": 11
+              "airline": 1,
+              "direction": 2,
+              "origin": 3,
+              "destination": 4,
+              "aircraft": 6,
+              "registration": 13
             }
           }
         }
@@ -498,14 +600,63 @@
         "uid": "prom"
       },
       "gridPos": {
-        "h": 7,
+        "h": 13,
         "w": 24,
         "x": 0,
-        "y": 20
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {},
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Arrival": {
+                        "text": "Arrival ↘",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Departure": {
+                        "text": "Departure ↗",
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "Domestic": {
+                        "text": "Domestic",
+                        "color": "purple",
+                        "index": 2
+                      },
+                      "Via Tunisia": {
+                        "text": "Via Tunisia",
+                        "color": "text",
+                        "index": 3
+                      },
+                      "Unknown": {
+                        "text": "Unknown",
+                        "color": "orange",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -620,7 +771,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "lengthkm"
+                "value": "suffix: km"
               },
               {
                 "id": "decimals",
@@ -636,7 +787,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocalNoDateIfToday"
+                "value": "time:HH:mm"
               }
             ]
           },
@@ -648,7 +799,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "dateTimeAsLocalNoDateIfToday"
+                "value": "time:HH:mm"
               }
             ]
           },
@@ -727,12 +878,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Airline"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Status"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 115
+                "value": 110
               }
             ]
           },
@@ -744,7 +919,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 135
               }
             ]
           },
@@ -792,7 +967,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 115
+                "value": 110
               }
             ]
           },
@@ -804,7 +979,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 115
+                "value": 110
               }
             ]
           },
@@ -829,7 +1004,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_latitude)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_latitude{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -841,7 +1016,7 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_longitude)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_longitude{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -853,7 +1028,7 @@
             "uid": "prom"
           },
           "refId": "C",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_heading_degrees)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_heading_degrees{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -865,7 +1040,7 @@
             "uid": "prom"
           },
           "refId": "D",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_phase)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_phase{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -877,7 +1052,7 @@
             "uid": "prom"
           },
           "refId": "E",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_altitude_feet)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_altitude_feet{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -889,7 +1064,7 @@
             "uid": "prom"
           },
           "refId": "F",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_speed_kmh)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_speed_kmh{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -901,7 +1076,7 @@
             "uid": "prom"
           },
           "refId": "G",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_distance_left_km)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_distance_left_km{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -913,7 +1088,7 @@
             "uid": "prom"
           },
           "refId": "H",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_eta_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_eta_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -925,7 +1100,7 @@
             "uid": "prom"
           },
           "refId": "I",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_tracked_since_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_tracked_since_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -937,7 +1112,7 @@
             "uid": "prom"
           },
           "refId": "J",
-          "expr": "max by (flight, origin, destination, aircraft, registration) (nouvelair_flight_last_update_timestamp_ms)",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_last_update_timestamp_ms{airline=~\"$airline\", direction=~\"$direction\"})",
           "legendFormat": "__auto",
           "instant": true,
           "range": false,
@@ -976,24 +1151,28 @@
               "Value #I": "Tracked since",
               "Value #J": "Last update",
               "flight": "Flight",
+              "airline": "Airline",
+              "direction": "Direction",
               "origin": "From",
               "destination": "To",
               "aircraft": "Aircraft",
               "registration": "Registration"
             },
             "indexByName": {
-              "Value #D": 3,
-              "Value #E": 5,
-              "Value #F": 6,
-              "Value #G": 7,
-              "Value #H": 8,
-              "Value #I": 9,
-              "Value #J": 10,
+              "Value #D": 5,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9,
+              "Value #H": 10,
+              "Value #I": 11,
+              "Value #J": 12,
               "flight": 0,
-              "origin": 1,
-              "destination": 2,
-              "aircraft": 4,
-              "registration": 11
+              "airline": 1,
+              "direction": 2,
+              "origin": 3,
+              "destination": 4,
+              "aircraft": 6,
+              "registration": 13
             }
           }
         }
@@ -1008,7 +1187,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "panels": []
     },
@@ -1025,7 +1204,7 @@
         "h": 5,
         "w": 4,
         "x": 0,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1049,7 +1228,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair_active_flights",
+          "expr": "flights_active",
           "legendFormat": "__auto"
         }
       ],
@@ -1077,7 +1256,7 @@
         "h": 5,
         "w": 4,
         "x": 4,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1101,7 +1280,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:messages:per_minute",
+          "expr": "flights:messages:per_minute",
           "legendFormat": "__auto"
         }
       ],
@@ -1129,7 +1308,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1161,7 +1340,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:position_age:p95",
+          "expr": "flights:position_age:p95",
           "legendFormat": "__auto"
         }
       ],
@@ -1189,7 +1368,7 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1221,7 +1400,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:invalid:ratio",
+          "expr": "flights:invalid:ratio",
           "legendFormat": "__auto"
         }
       ],
@@ -1249,7 +1428,7 @@
         "h": 5,
         "w": 4,
         "x": 16,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1281,7 +1460,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:completeness:ratio",
+          "expr": "flights:completeness:ratio",
           "legendFormat": "__auto"
         }
       ],
@@ -1309,7 +1488,7 @@
         "h": 5,
         "w": 4,
         "x": 20,
-        "y": 28
+        "y": 36
       },
       "fieldConfig": {
         "defaults": {
@@ -1363,14 +1542,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 41
       },
       "panels": []
     },
     {
       "type": "timeseries",
       "title": "Flights tracked: today vs. yesterday",
-      "description": "Nouvelair has a daily rhythm (quiet at night, busy in the morning). Yesterday is the baseline; a big gap means a problem.",
+      "description": "Tunisian air traffic has a daily rhythm (quiet at night, busy in the morning). Yesterday is the baseline; a big gap means a problem.",
       "id": 13,
       "datasource": {
         "type": "prometheus",
@@ -1380,7 +1559,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 34
+        "y": 42
       },
       "fieldConfig": {
         "defaults": {
@@ -1421,7 +1600,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair_active_flights",
+          "expr": "flights_active",
           "legendFormat": "today"
         },
         {
@@ -1430,7 +1609,7 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "nouvelair:active_flights:yesterday",
+          "expr": "flights:active:yesterday",
           "legendFormat": "same time yesterday"
         }
       ]
@@ -1438,7 +1617,7 @@
     {
       "type": "timeseries",
       "title": "Planes seen by the tracking network",
-      "description": "All aircraft adsb.lol reports over our areas, and how many are Nouvelair. If 'all airlines' drops, the source has a problem, not Nouvelair.",
+      "description": "All aircraft adsb.lol reports over our areas, and how many are flying to/from Tunisia. If 'all aircraft' drops too, the problem is the source, not Tunisian traffic.",
       "id": 14,
       "datasource": {
         "type": "prometheus",
@@ -1448,7 +1627,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 34
+        "y": 42
       },
       "fieldConfig": {
         "defaults": {
@@ -1458,7 +1637,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Nouvelair"
+              "options": "Tunisia flights"
             },
             "properties": [
               {
@@ -1477,7 +1656,7 @@
           },
           "refId": "A",
           "expr": "adsb_aircraft_in_areas",
-          "legendFormat": "all airlines"
+          "legendFormat": "all aircraft"
         },
         {
           "datasource": {
@@ -1485,8 +1664,8 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "producer_airline_aircraft",
-          "legendFormat": "Nouvelair"
+          "expr": "producer_tunisia_aircraft",
+          "legendFormat": "Tunisia flights"
         }
       ]
     },
@@ -1499,7 +1678,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 42
+        "y": 50
       },
       "panels": []
     },
@@ -1516,7 +1695,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 43
+        "y": 51
       },
       "fieldConfig": {
         "defaults": {
@@ -1531,7 +1710,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:position_age:p50",
+          "expr": "flights:position_age:p50",
           "legendFormat": "typical (median)"
         },
         {
@@ -1540,7 +1719,7 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "nouvelair:position_age:p95",
+          "expr": "flights:position_age:p95",
           "legendFormat": "worst 5%"
         }
       ]
@@ -1558,7 +1737,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 43
+        "y": 51
       },
       "fieldConfig": {
         "defaults": {
@@ -1579,7 +1758,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:stage_latency:p95",
+          "expr": "flights:stage_latency:p95",
           "legendFormat": "{{stage}}"
         }
       ]
@@ -1597,7 +1776,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 43
+        "y": 51
       },
       "fieldConfig": {
         "defaults": {
@@ -1644,7 +1823,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 59
       },
       "panels": []
     },
@@ -1661,7 +1840,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 52
+        "y": 60
       },
       "fieldConfig": {
         "defaults": {
@@ -1683,7 +1862,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sum by (reason) (increase(nouvelair_invalid_messages_total[10m]))",
+          "expr": "sum by (reason) (increase(flights_invalid_messages_total[10m]))",
           "legendFormat": "{{reason}}"
         }
       ]
@@ -1701,7 +1880,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 52
+        "y": 60
       },
       "fieldConfig": {
         "defaults": {
@@ -1719,7 +1898,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair_raw_field_count{stat=\"min\"}",
+          "expr": "flights_raw_field_count{stat=\"min\"}",
           "legendFormat": "fewest fields"
         },
         {
@@ -1728,7 +1907,7 @@
             "uid": "prom"
           },
           "refId": "B",
-          "expr": "nouvelair_raw_field_count{stat=\"max\"}",
+          "expr": "flights_raw_field_count{stat=\"max\"}",
           "legendFormat": "most fields"
         }
       ]
@@ -1746,7 +1925,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 52
+        "y": 60
       },
       "fieldConfig": {
         "defaults": {
@@ -1761,7 +1940,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair:unknown_route:ratio",
+          "expr": "flights:unknown_route:ratio",
           "legendFormat": "unknown route"
         }
       ]
@@ -1775,24 +1954,24 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 68
       },
       "panels": []
     },
     {
       "type": "bargauge",
-      "title": "Flights by destination country",
-      "description": "",
+      "title": "Top 10 airlines in the air",
+      "description": "If one airline suddenly disappears, check its flight numbers in the route list.",
       "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "h": 9,
-        "w": 9,
+        "h": 10,
+        "w": 8,
         "x": 0,
-        "y": 61
+        "y": 69
       },
       "fieldConfig": {
         "defaults": {
@@ -1807,8 +1986,53 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sort_desc(nouvelair_active_flights_by_destination)",
-          "legendFormat": "{{destination_country}}",
+          "expr": "topk(10, flights_active_by_airline)",
+          "legendFormat": "{{airline}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showUnfilled": true
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Countries connected to Tunisia right now",
+      "description": "For arrivals: the country of departure. For departures: the destination country.",
+      "id": 25,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 8,
+        "y": 69
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "refId": "A",
+          "expr": "topk(10, flights_active_by_country)",
+          "legendFormat": "{{country}}",
           "instant": true,
           "range": false
         }
@@ -1826,18 +2050,144 @@
     },
     {
       "type": "piechart",
-      "title": "Aircraft in the air",
+      "title": "Arrivals vs. departures",
       "description": "",
-      "id": 25,
+      "id": 26,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "h": 9,
-        "w": 6,
-        "x": 9,
-        "y": 61
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 69
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Arrival"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Departure"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Domestic"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Via Tunisia"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Unknown"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "refId": "A",
+          "expr": "flights_active_by_direction",
+          "legendFormat": "{{direction}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Aircraft models in the air",
+      "description": "",
+      "id": 27,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -1852,7 +2202,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "nouvelair_active_flights_by_type",
+          "expr": "topk(8, flights_active_by_type)",
           "legendFormat": "{{aircraft}}",
           "instant": true,
           "range": false
@@ -1867,7 +2217,7 @@
         },
         "legend": {
           "displayMode": "table",
-          "placement": "bottom",
+          "placement": "right",
           "values": [
             "value"
           ]
@@ -1878,16 +2228,16 @@
       "type": "bargauge",
       "title": "Altitude of positions (last 24h)",
       "description": "Most positions should be at cruising altitude (30,000–40,000 ft).",
-      "id": 26,
+      "id": 28,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "h": 9,
-        "w": 9,
-        "x": 15,
-        "y": 61
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 79
       },
       "fieldConfig": {
         "defaults": {
@@ -1902,7 +2252,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sum by (le) (increase(nouvelair_altitude_feet_bucket[24h]))",
+          "expr": "sum by (le) (increase(flights_altitude_feet_bucket[24h]))",
           "legendFormat": "{{le}}",
           "instant": true,
           "range": false,
@@ -1922,13 +2272,13 @@
     {
       "type": "row",
       "title": "5 · Lineage: where does the data come from, and does it all arrive?",
-      "id": 27,
+      "id": 29,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 86
       },
       "panels": []
     },
@@ -1936,7 +2286,7 @@
       "type": "stat",
       "title": "① Planes seen by adsb.lol",
       "description": "Last hour",
-      "id": 28,
+      "id": 30,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -1945,7 +2295,7 @@
         "h": 5,
         "w": 4,
         "x": 0,
-        "y": 71
+        "y": 87
       },
       "fieldConfig": {
         "defaults": {
@@ -1988,9 +2338,9 @@
     },
     {
       "type": "stat",
-      "title": "② Nouvelair planes kept",
+      "title": "② Tunisia flights kept",
       "description": "Last hour",
-      "id": 29,
+      "id": 31,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -1999,7 +2349,7 @@
         "h": 5,
         "w": 4,
         "x": 4,
-        "y": 71
+        "y": 87
       },
       "fieldConfig": {
         "defaults": {
@@ -2023,7 +2373,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sum(sum_over_time(producer_airline_aircraft[1h:1m]))",
+          "expr": "sum(sum_over_time(producer_tunisia_aircraft[1h:1m]))",
           "legendFormat": "__auto",
           "instant": true,
           "range": false
@@ -2044,7 +2394,7 @@
       "type": "stat",
       "title": "③ Sent to Kafka",
       "description": "Last hour",
-      "id": 30,
+      "id": 32,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -2053,7 +2403,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 71
+        "y": 87
       },
       "fieldConfig": {
         "defaults": {
@@ -2098,7 +2448,7 @@
       "type": "stat",
       "title": "④ Received by quality checker",
       "description": "Last hour",
-      "id": 31,
+      "id": 33,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -2107,7 +2457,7 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 71
+        "y": 87
       },
       "fieldConfig": {
         "defaults": {
@@ -2131,7 +2481,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sum(increase(nouvelair_messages_total[1h]))",
+          "expr": "sum(increase(flights_messages_total[1h]))",
           "legendFormat": "__auto",
           "instant": true,
           "range": false
@@ -2152,7 +2502,7 @@
       "type": "stat",
       "title": "⑤ Passed all checks",
       "description": "Last hour",
-      "id": 32,
+      "id": 34,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -2161,7 +2511,7 @@
         "h": 5,
         "w": 4,
         "x": 16,
-        "y": 71
+        "y": 87
       },
       "fieldConfig": {
         "defaults": {
@@ -2185,7 +2535,7 @@
             "uid": "prom"
           },
           "refId": "A",
-          "expr": "sum(increase(nouvelair_valid_positions_total[1h]))",
+          "expr": "sum(increase(flights_valid_positions_total[1h]))",
           "legendFormat": "__auto",
           "instant": true,
           "range": false
@@ -2205,12 +2555,12 @@
     {
       "type": "text",
       "title": "Data sources",
-      "id": 33,
+      "id": 35,
       "gridPos": {
         "h": 5,
         "w": 4,
         "x": 20,
-        "y": 71
+        "y": 87
       },
       "options": {
         "mode": "markdown",
@@ -2221,7 +2571,7 @@
       "type": "timeseries",
       "title": "Requests to adsb.lol by area",
       "description": "Status 200 = OK. Anything else (or 'error') means adsb.lol did not answer correctly.",
-      "id": 34,
+      "id": 36,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -2230,7 +2580,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 76
+        "y": 92
       },
       "fieldConfig": {
         "defaults": {
@@ -2261,7 +2611,7 @@
       "type": "timeseries",
       "title": "adsb.lol response time (95th percentile)",
       "description": "",
-      "id": 35,
+      "id": 37,
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -2270,7 +2620,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 76
+        "y": 92
       },
       "fieldConfig": {
         "defaults": {
