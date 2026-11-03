@@ -64,7 +64,7 @@ container replaces local Prometheus and Grafana and sends the metrics to your Gr
    ```bash
    set -a && . ./.env && set +a && docker run --rm -v "$PWD/prometheus:/rules:ro" grafana/mimirtool:2.14.0 \
      rules load /rules/rules.yml /rules/alerts.yml \
-     --address="${GRAFANA_CLOUD_PROM_URL%/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
+     --address="${GRAFANA_CLOUD_PROM_URL%/api/prom/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
    ```
 
 4. In your stack's Grafana, go to **Dashboards → New → Import** and upload
