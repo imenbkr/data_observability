@@ -186,6 +186,10 @@ make notebook   # build the JSON and create/update it in local Grafana → http:
 On Grafana Cloud, Terraform deploys it with `grafana_apps_generic_resource` once the feature is
 enabled: add `-e TF_VAR_enable_notebook=true` to the Terraform commands above.
 
+Until then, the same content is deployed as a regular dashboard in the **Forecasting** folder
+([`grafana/dashboards/volume-forecasting.json`](grafana/dashboards/volume-forecasting.json), generated
+from the notebook by `scripts/build_forecast_dashboard.py`; `make notebook` rebuilds both).
+
 ## Project layout
 
 ```
