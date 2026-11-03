@@ -146,17 +146,29 @@ Two real quirks this pipeline handles:
 
 Every alert has `pillar` and `team=data-engineering` labels, ready for notification routing.
 
-## Showcase it with a Grafana Notebook
+## Notebook: detect data volume drops
 
-Grafana 13 Notebooks (enabled through the `dashboard.notebooks` feature toggle) combine
-panels with written analysis, and export as PDF or Markdown.
+[`grafana/notebooks/detect-data-volume-drops.json`](grafana/notebooks/detect-data-volume-drops.json)
+is a Grafana Notebook that rebuilds the Dynatrace tutorial
+[*Detect data volume drops*](https://docs.dynatrace.com/docs/observe/data-observability/use-cases/detect-data-volume-drops)
+on this pipeline's live data. It mixes explanations, PromQL and YAML cells, and live panels:
 
-1. In Grafana, open **Notebooks → New notebook**, titled e.g. *"Is our flight data healthy? Tunisian air traffic, one day"*.
-2. Start with the **map panel** and one paragraph about the data source.
-3. For each pillar, add a text block (the question it answers) and then the matching panel.
-4. Write what you observed. For example: *"Between 01:00 and 05:00 there are no flights,
-   which is expected: the volume alert compares with yesterday so it stays silent."*
-5. Export as PDF, or share the link.
+1. **High ingestion frequency:** the adsb.lol stream compared with the same time yesterday, plus a
+   missing-data check (`SourceVolumeBelowBaseline`, `SourceDataMissing`).
+2. **Low ingestion frequency:** the hourly count of flight positions compared with a one-step-ahead
+   forecast. That's the mean of the last 72 hourly samples ± 1.645 sd (90% coverage), recorded by the
+   `volume-forecast` rule group and alerted on by `FlightVolumeBelowForecast`.
+
+Notebooks need the `dashboard.notebooks` feature toggle (on in the local Grafana; on Grafana Cloud,
+ask Grafana support to enable it). A notebook is a `Notebook` resource in the
+`dashboard.grafana.app/v2beta1` API, so it is deployed as code:
+
+```bash
+make notebook   # build the JSON and create/update it in local Grafana → http://localhost:3000/notebooks/detect-data-volume-drops
+```
+
+On Grafana Cloud, Terraform deploys it with `grafana_apps_generic_resource` once the feature is
+enabled: add `-e TF_VAR_enable_notebook=true` to the Terraform commands above.
 
 ## Project layout
 
@@ -171,7 +183,8 @@ panels with written analysis, and export as PDF or Markdown.
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts
 ├── alloy/config.alloy           # ships metrics to Grafana Cloud (profile "cloud")
-├── terraform/main.tf            # deploys the dashboard to Grafana Cloud as code
+├── terraform/main.tf            # deploys the dashboard (and notebook) to Grafana Cloud as code
+├── grafana/notebooks/           # "Detect data volume drops" notebook (scripts/build_notebook.py)
 └── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```
 

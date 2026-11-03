@@ -48,3 +48,28 @@ groups:
         labels: { pillar: lineage, team: data-engineering, severity: warning }
         annotations:
           summary: "Only {{ $value | humanizePercentage }} of produced messages reach the consumer"
+
+  - name: volume-drop-alerts
+    rules:
+      # High-frequency data: compare the live stream with the same moment yesterday
+      - alert: SourceVolumeBelowBaseline
+        expr: sum(adsb_aircraft_in_areas) < 0.5 * sum(adsb_aircraft_in_areas offset 1d)
+        for: 15m
+        labels: { pillar: volume, team: data-engineering, severity: warning }
+        annotations:
+          summary: "adsb.lol returns {{ $value }} aircraft, less than half of yesterday at this time"
+      - alert: SourceDataMissing
+        expr: absent_over_time(adsb_aircraft_in_areas[10m])
+        labels: { pillar: volume, team: data-engineering, severity: page }
+        annotations:
+          summary: "No aircraft data from adsb.lol for 10 minutes"
+      # Low-frequency data: Step 4, current hourly count below the forecast's lower bound.
+      # The last line keeps the alert quiet at night, when there is no traffic to forecast.
+      - alert: FlightVolumeBelowForecast
+        expr: |
+          flights:positions:count1h < flights:positions:lower_bound
+          and on() flights:positions:count1h offset 1d > 100
+        for: 10m
+        labels: { pillar: volume, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Only {{ $value | humanize }} flight positions in the last hour, below the forecast's lower bound"

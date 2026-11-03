@@ -1,4 +1,4 @@
-.PHONY: up down clean ps logs flights topic routes help
+.PHONY: up down clean ps logs flights topic routes notebook help
 
 up:       ## Build and start the stack
 	docker compose up -d --build
@@ -27,3 +27,6 @@ routes:   ## Refresh data/routes.csv from public sources, then restart the produ
 
 help:     ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+
+notebook: ## Build the "Detect data volume drops" notebook and deploy it to local Grafana
+	python3 scripts/build_notebook.py && python3 scripts/deploy_notebook.py

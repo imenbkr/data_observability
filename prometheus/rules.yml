@@ -35,3 +35,25 @@ groups:
         expr: |
           sum(rate(adsb_api_requests_total{status!="200"}[10m]))
           / clamp_min(sum(rate(adsb_api_requests_total[10m])), 1e-9)
+
+  # "Detect data volume drops" (see grafana/notebooks/): a one-step-ahead forecast of the
+  # hourly record count, like the Dynatrace Generic Forecast Analysis.
+  - name: volume-forecast
+    interval: 5m
+    rules:
+      # Step 3: records received in the last hour (the "current batch")
+      - record: flights:positions:count1h
+        expr: sum(increase(flights_valid_positions_total[1h]))
+      # Step 2: prediction band from the previous 72 hourly samples, excluding the current hour.
+      # mean ± 1.645 sd ≈ 90% coverage probability
+      - record: flights:positions:forecast_mean
+        expr: avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
+      - record: flights:positions:lower_bound
+        expr: |
+          clamp_min(
+            avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
+            - 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h), 0)
+      - record: flights:positions:upper_bound
+        expr: |
+          avg_over_time(flights:positions:count1h[72h:1h] offset 1h)
+          + 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h)

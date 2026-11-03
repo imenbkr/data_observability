@@ -1,0 +1,1000 @@
+{
+  "apiVersion": "dashboard.grafana.app/v2beta1",
+  "kind": "Notebook",
+  "metadata": {
+    "name": "detect-data-volume-drops"
+  },
+  "spec": {
+    "title": "Detect data volume drops · Tunisia flights",
+    "description": "Grafana version of the Dynatrace data-observability tutorial, on live flight data.",
+    "tags": [
+      "data-observability",
+      "volume",
+      "tutorial"
+    ],
+    "timeSettings": {
+      "from": "now-24h",
+      "to": "now",
+      "autoRefresh": "",
+      "autoRefreshIntervals": [],
+      "hideTimepicker": false,
+      "fiscalYearStartMonth": 0
+    },
+    "elements": {
+      "intro": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook rebuilds the Dynatrace tutorial\n[*Detect data volume drops*](https://docs.dynatrace.com/docs/observe/data-observability/use-cases/detect-data-volume-drops)\nwith Grafana, Prometheus and the **Tunisia flights** pipeline:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**, so there are two parts:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast."
+            }
+          }
+        }
+      },
+      "high-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 1. High ingestion frequency: baseline comparison\n\nOur source is a continuous stream: every minute, adsb.lol returns about 1,000 aircraft over\nTunisia and Europe. Dynatrace learns a baseline automatically. In Prometheus we use the same moment\n**yesterday** as the baseline, which absorbs the daily rhythm of air traffic for free."
+            }
+          }
+        }
+      },
+      "high-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 3,
+          "title": "Aircraft reported by adsb.lol: today vs. yesterday",
+          "description": "The alert fires when 'today' stays below the dashed line for 15 minutes.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "sum(adsb_aircraft_in_areas)",
+                        "legendFormat": "today",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "0.5 * sum(adsb_aircraft_in_areas offset 1d)",
+                        "legendFormat": "alert threshold (50% of yesterday)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "alert threshold (50% of yesterday)"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "high-rules": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "Two alert rules cover this case (in `prometheus/alerts.yml`, group `volume-drop-alerts`):\n\n- **Volume drop:** less than half of yesterday's volume for 15 minutes.\n- **Missing data:** no data at all for 10 minutes, the worst case of a drop."
+            }
+          }
+        }
+      },
+      "high-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- alert: SourceVolumeBelowBaseline\n  expr: sum(adsb_aircraft_in_areas) < 0.5 * sum(adsb_aircraft_in_areas offset 1d)\n  for: 15m\n  labels: { pillar: volume, team: data-engineering, severity: warning }\n\n- alert: SourceDataMissing\n  expr: absent_over_time(adsb_aircraft_in_areas[10m])\n  labels: { pillar: volume, team: data-engineering, severity: page }"
+            }
+          }
+        }
+      },
+      "high-tune": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "**Tune before you trust it.** Dynatrace has an alert preview. In Grafana, open the rule in\n**Alerting → Alert rules → Edit** and use **Preview** to see how often it would have fired over the\nlast days. Raise or lower the `0.5` factor until it only fires on real incidents."
+            }
+          }
+        }
+      },
+      "low-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 2. Low ingestion frequency: one-step-ahead forecast\n\nFor batch data, a fixed threshold is too blunt and a rate is meaningless between batches. The\nDynatrace tutorial forecasts the **next hour's record count** and checks whether the actual count lands\ninside the prediction interval. We treat the **number of valid flight positions per hour** as our batch.\n\n| Dynatrace | Grafana / Prometheus |\n|---|---|\n| Workflow with cron trigger `0 * * * *` | Recording rules evaluated by the ruler on a schedule |\n| Generic Forecast Analysis | `avg_over_time` ± `stddev_over_time` over the history |\n| Learning period 72 h, end time `now-1h` | Subquery `[72h:1h] offset 1h`: 72 hourly samples, current hour excluded |\n| Coverage probability 0.9 | ± 1.645 standard deviations (normal approximation) |\n| Data points to predict: 1 | One band value per evaluation, compared with the current hour |\n| Run JavaScript: compare and alert | An alert rule comparing current count and lower bound |"
+            }
+          }
+        }
+      },
+      "step1": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Step 1: Schedule the analysis\n\nInstead of a workflow, the Prometheus ruler evaluates the group `volume-forecast` in `prometheus/rules.yml`\nevery 5 minutes. On Grafana Cloud, the same file is uploaded to the stack with `mimirtool rules load`."
+            }
+          }
+        }
+      },
+      "step1-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- name: volume-forecast\n  interval: 5m\n  rules:\n    - record: flights:positions:count1h\n      expr: sum(increase(flights_valid_positions_total[1h]))"
+            }
+          }
+        }
+      },
+      "step2": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Step 2: Analyze the data (forecast)\n\nThe forecast is the mean of the previous 72 hourly counts, with a band of ± 1.645 standard\ndeviations around it: about **90%** of normal hours should fall inside it."
+            }
+          }
+        }
+      },
+      "step2-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- record: flights:positions:lower_bound\n  expr: |\n    clamp_min(\n      avg_over_time(flights:positions:count1h[72h:1h] offset 1h)\n      - 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h), 0)\n- record: flights:positions:upper_bound\n  expr: |\n    avg_over_time(flights:positions:count1h[72h:1h] offset 1h)\n    + 1.645 * stddev_over_time(flights:positions:count1h[72h:1h] offset 1h)"
+            }
+          }
+        }
+      },
+      "step2-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 12,
+          "title": "Hourly flight positions and the 90% prediction band",
+          "description": "A point of 'actual' below the shaded band is a volume drop. The band appears once a few hours of history exist.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:count1h",
+                        "legendFormat": "actual (last hour)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:upper_bound",
+                        "legendFormat": "upper bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:lower_bound",
+                        "legendFormat": "lower bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "D",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:forecast_mean",
+                        "legendFormat": "forecast",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "upper bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.fillBelowTo",
+                        "value": "lower bound"
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "custom.fillOpacity",
+                        "value": 20
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "lower bound"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 0
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "forecast"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "actual (last hour)"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "step2-season": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "**Seasonality matters here.** Air traffic has a strong daily cycle (almost nothing at 03:00, peaks in\nthe morning), so a flat 72-hour band is wide during the day and misfires at night. The Dynatrace\ntutorial gives the same advice: for seasonal data, train on **at least two weeks**. Two practical\noptions:\n\n- compare with the **same hour on previous days** (`offset 1d`, `offset 7d`), as in part 1;\n- on Grafana Cloud, use **Machine Learning → Metric forecasts**, which learns daily and weekly\n  seasonality and plays the role of the Dynatrace forecast analyzer."
+            }
+          }
+        }
+      },
+      "step3": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Step 3: Retrieve the current records\n\nThe equivalent of the tutorial's `fetch events, from:now()-60min | summarize count()`:"
+            }
+          }
+        }
+      },
+      "step3-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "promql",
+              "code": "sum(increase(flights_valid_positions_total[1h]))"
+            }
+          }
+        }
+      },
+      "step3-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 16,
+          "title": "Flight positions received in the last hour",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:count1h",
+                        "legendFormat": "last hour",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:lower_bound",
+                        "legendFormat": "lower bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "colorMode": "value",
+                "graphMode": "area",
+                "textMode": "value_and_name"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "step4": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Step 4: Compare prediction and current volume, then alert\n\nDynatrace runs a JavaScript step that compares the count with the forecast's lower bound and\ncreates an *Abnormal data volume drop* event. Here it is a single alert rule (in `prometheus/alerts.yml`).\n\nThe last line is a lesson from real data: without it, the rule fires every night, because the\nforecast still expects daytime traffic. It only alerts when the same hour yesterday had real traffic."
+            }
+          }
+        }
+      },
+      "step4-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- alert: FlightVolumeBelowForecast\n  expr: |\n    flights:positions:count1h < flights:positions:lower_bound\n    and on() flights:positions:count1h offset 1d > 100\n  for: 10m\n  labels: { pillar: volume, team: data-engineering, severity: warning }\n  annotations:\n    summary: \"Only {{ $value | humanize }} flight positions in the last hour, below the forecast's lower bound\""
+            }
+          }
+        }
+      },
+      "step4-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 19,
+          "title": "Headroom above the lower bound",
+          "description": "Below zero (red area) the current hour is under the forecast band.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "flights:positions:count1h - flights:positions:lower_bound",
+                        "legendFormat": "actual − lower bound",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "thresholdsStyle": {
+                      "mode": "area"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "transparent",
+                        "value": 0
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "step5": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "### Step 5: Observe the low data volume alerts\n\nFiring and pending volume alerts are listed below and in **Alerting → Alert rules** (filter\n`pillar=volume`). To get notified, add a contact point (email, Slack) and a notification policy\nmatching `team=data-engineering`."
+            }
+          }
+        }
+      },
+      "step5-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 21,
+          "title": "Volume alerts",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "max by (alertname) (ALERTS{pillar=\"volume\", alertstate=\"firing\"})",
+                        "legendFormat": "{{alertname}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "vector(0) unless on() count(ALERTS{pillar=\"volume\", alertstate=\"firing\"})",
+                        "legendFormat": "all volume checks",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "state-timeline",
+            "version": "",
+            "spec": {
+              "options": {
+                "showValue": "never",
+                "mergeValues": true
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "OK",
+                          "color": "green",
+                          "index": 0
+                        },
+                        "1": {
+                          "text": "Firing",
+                          "color": "red",
+                          "index": 1
+                        }
+                      }
+                    }
+                  ]
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "summary": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## Summary\n\n| Data arrives… | Detect drops with | Rule |\n|---|---|---|\n| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n\nStart with volume: it is the cheapest check and catches the most incidents."
+            }
+          }
+        }
+      }
+    },
+    "layout": {
+      "kind": "NotebookLayout",
+      "spec": {
+        "cells": [
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "intro"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "high-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "high-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "high-rules"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "high-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "high-tune"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "low-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step1"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step1-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step2"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step2-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step2-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step2-season"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step3"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step3-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step3-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step4"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step4-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step4-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step5"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "step5-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "summary"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
