@@ -9,6 +9,7 @@ Data source UIDs are placeholders filled in at deploy time:
 
 Usage: python scripts/build_notebook.py
 """
+import base64
 import json
 import pathlib
 
@@ -18,6 +19,7 @@ ML_DS_UID = "__ML_DATASOURCE_UID__"
 ML_METRIC = "tunisia_flight_positions"
 RULES = "prometheus/rules.yml"
 ALERTS = "prometheus/alerts.yml"
+IMAGES = OUT.parent / "images"  # taken by scripts/take_screenshots.py
 
 elements = {}
 layout = []
@@ -31,6 +33,15 @@ def add(name, element):
 
 def md(name, text):
     add(name, {"kind": "Cell", "spec": {"content": {"kind": "Markdown", "spec": {"text": text.strip()}}}})
+
+
+def screenshot(name, file, caption):
+    """Markdown cell with an embedded screenshot (data URI), skipped if the image is missing."""
+    path = IMAGES / f"{file}.jpg"
+    if not path.exists():
+        return
+    uri = "data:image/jpeg;base64," + base64.b64encode(path.read_bytes()).decode()
+    md(name, f"![{caption}]({uri})\n\n*{caption}*")
 
 
 def code(name, language, text):
@@ -89,6 +100,16 @@ How you detect a drop depends on **how often data arrives**:
 """)
 
 # --- Part 1: high frequency -----------------------------------------------------------------
+md("context", """
+### The data
+
+The live dashboard tracks every flight to and from Tunisia, and each position is one record on the
+Kafka topic `tunisia.flights`. These record counts are what we monitor below.
+""")
+screenshot("context-map", "flight-map", "Flights to and from Tunisia, live from the Tunisia Flights dashboard")
+screenshot("context-table", "flights-table", "The same flights as a table: route, status and estimated arrival")
+screenshot("context-kafka", "kafka-messages", "Raw records on the Kafka topic tunisia.flights (Kafka UI)")
+
 md("high-title", """
 ## 1. High ingestion frequency: baseline comparison
 
@@ -227,6 +248,8 @@ Firing volume alerts are listed below and in **Alerting → Alert rules** (filte
 To get notified, add a contact point (email, Slack) and a notification policy matching
 `team=data-engineering`.
 """)
+screenshot("step5-rules", "volume-alert-rules",
+           "Alerting → Alert rules filtered on pillar=volume: the five volume rules from this notebook")
 panel("step5-panel", "Volume alerts", "state-timeline",
       [('max by (alertname) (ALERTS{pillar="volume", alertstate="firing"})', "{{alertname}}"),
        ('vector(0) unless on() count(ALERTS{pillar="volume", alertstate="firing"})', "all volume checks")],

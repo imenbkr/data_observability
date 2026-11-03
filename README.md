@@ -171,6 +171,10 @@ Some panels need history before they show anything:
 | "Yesterday" lines, seasonal baseline | 1 day (seasonal band: 2 days) |
 | Grafana ML forecast | 100 training points (~3.5 hours), then retrains every 24 hours |
 
+Screenshots of the live map, the flights table, the Kafka topic and the alert rules are embedded in
+the notebook as images (`grafana/notebooks/images/`). Refresh them from the running stack with
+`make screenshots`, which needs Google Chrome or Chromium and Pillow.
+
 Notebooks need the `dashboard.notebooks` feature toggle (on in the local Grafana; on Grafana Cloud,
 ask Grafana support to enable it). A notebook is a `Notebook` resource in the
 `dashboard.grafana.app/v2beta1` API, so it is deployed as code:
