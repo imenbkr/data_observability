@@ -40,14 +40,14 @@
       "title": "",
       "transparent": true,
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 24,
         "x": 0,
         "y": 0
       },
       "options": {
         "mode": "markdown",
-        "content": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning."
+        "content": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.\n\nThen two forecasting use cases that answer real questions:\n\n4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.\n5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan."
       }
     },
     {
@@ -59,7 +59,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 10
       },
       "options": {
         "mode": "markdown",
@@ -75,7 +75,7 @@
         "h": 20,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 14
       },
       "options": {
         "mode": "markdown",
@@ -91,7 +91,7 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 34
       },
       "options": {
         "mode": "markdown",
@@ -107,7 +107,7 @@
         "h": 23,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 50
       },
       "options": {
         "mode": "markdown",
@@ -123,7 +123,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 73
       },
       "options": {
         "mode": "markdown",
@@ -143,7 +143,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 78
       },
       "targets": [
         {
@@ -208,7 +208,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 87
       },
       "options": {
         "mode": "markdown",
@@ -224,7 +224,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 88
+        "y": 90
       },
       "options": {
         "mode": "markdown",
@@ -240,7 +240,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 95
+        "y": 97
       },
       "options": {
         "mode": "markdown",
@@ -256,7 +256,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 100
       },
       "options": {
         "mode": "markdown",
@@ -272,7 +272,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 108
       },
       "options": {
         "mode": "markdown",
@@ -288,7 +288,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 110
+        "y": 112
       },
       "options": {
         "mode": "markdown",
@@ -304,7 +304,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 116
+        "y": 118
       },
       "options": {
         "mode": "markdown",
@@ -320,7 +320,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 123
       },
       "options": {
         "mode": "markdown",
@@ -340,7 +340,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 129
+        "y": 131
       },
       "targets": [
         {
@@ -488,7 +488,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 138
+        "y": 140
       },
       "options": {
         "mode": "markdown",
@@ -504,7 +504,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 141
+        "y": 143
       },
       "options": {
         "mode": "markdown",
@@ -524,7 +524,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 144
+        "y": 146
       },
       "targets": [
         {
@@ -573,7 +573,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 150
+        "y": 152
       },
       "options": {
         "mode": "markdown",
@@ -589,7 +589,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 155
+        "y": 157
       },
       "options": {
         "mode": "markdown",
@@ -609,7 +609,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 161
+        "y": 163
       },
       "targets": [
         {
@@ -657,7 +657,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 170
+        "y": 172
       },
       "options": {
         "mode": "markdown",
@@ -673,7 +673,7 @@
         "h": 22,
         "w": 24,
         "x": 0,
-        "y": 175
+        "y": 177
       },
       "options": {
         "mode": "markdown",
@@ -693,7 +693,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 197
+        "y": 199
       },
       "targets": [
         {
@@ -751,7 +751,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 206
+        "y": 208
       },
       "options": {
         "mode": "markdown",
@@ -767,7 +767,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 214
+        "y": 216
       },
       "options": {
         "mode": "markdown",
@@ -783,7 +783,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 219
+        "y": 221
       },
       "options": {
         "mode": "markdown",
@@ -803,7 +803,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 226
+        "y": 228
       },
       "targets": [
         {
@@ -951,7 +951,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 235
+        "y": 237
       },
       "options": {
         "mode": "markdown",
@@ -967,7 +967,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 240
+        "y": 242
       },
       "options": {
         "mode": "markdown",
@@ -987,7 +987,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 243
+        "y": 245
       },
       "targets": [
         {
@@ -1071,7 +1071,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 252
+        "y": 254
       },
       "options": {
         "mode": "markdown",
@@ -1087,7 +1087,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 261
+        "y": 263
       },
       "options": {
         "mode": "markdown",
@@ -1107,7 +1107,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 273
+        "y": 275
       },
       "targets": [
         {
@@ -1255,7 +1255,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 282
+        "y": 284
       },
       "options": {
         "mode": "markdown",
@@ -1271,7 +1271,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 285
+        "y": 287
       },
       "options": {
         "mode": "markdown",
@@ -1287,11 +1287,489 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 290
+        "y": 292
       },
       "options": {
         "mode": "markdown",
-        "content": "## Summary\n\n| Data arrives… | Detect drops with | Rule |\n|---|---|---|\n| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| With a daily or weekly cycle | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates."
+        "content": "## 4. Use case: forecast arrivals at Tunisian airports\n\nForecasting is most useful when it answers an operational question. Ground handling, border control,\ntaxis and people waiting at the airport all ask the same one: **how many planes will land at Tunis,\nEnfidha, Monastir or Djerba in the coming hours?** The pipeline answers it on two horizons:\n\n| Horizon | Method | Source |\n|---|---|---|\n| Next 30 min, 1 h, 2 h | Count tracked flights whose estimated arrival falls in the window | Live positions: distance left ÷ ground speed |\n| Next 24 h and beyond | Grafana Machine Learning forecast of landings per hour, per airport | History of detected landings; learns the daily and weekly schedule |"
+      }
+    },
+    {
+      "type": "bargauge",
+      "id": 39,
+      "title": "Expected arrivals at Tunisian airports",
+      "description": "Flights currently tracked toward each Tunisian airport, by estimated arrival time. Airports with no traffic are hidden.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 299
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (airport) (airport_expected_arrivals{within=\"30m\"})",
+          "legendFormat": "{{airport}} · 30 min"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (airport) (airport_expected_arrivals{within=\"1h\"})",
+          "legendFormat": "{{airport}} · 1 h"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (airport) (airport_expected_arrivals{within=\"2h\"})",
+          "legendFormat": "{{airport}} · 2 h"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "valueMode": "color",
+        "namePlacement": "left"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "None expected",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byValue",
+              "options": {
+                "reducer": "max",
+                "op": "lte",
+                "value": 0
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "viz": true,
+                  "legend": true,
+                  "tooltip": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "text",
+      "id": 40,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 308
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Counting landings.** ADS-B has no \"landed\" message, so the quality checker detects it: a flight to a\nTunisian airport counts as **landed** when it is below 4,000 ft within 25 km of the airport. Receiver\ncoverage near the ground in Tunisia is thin, so a flight that **disappears within 80 km** of its\ndestination also counts (`detection=\"lost_near_destination\"`). Take-offs are counted the same way near\nthe departure airport. These counts are the training data for the forecast."
+      }
+    },
+    {
+      "type": "text",
+      "id": 41,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 313
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "```yaml\n- record: airport:arrivals:count1h\n  expr: sum by (airport) (increase(airport_arrivals_total[1h]))\n- record: airport:departures:count1h\n  expr: sum by (airport) (increase(airport_departures_total[1h]))\n```"
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 42,
+      "title": "Landings and take-offs per hour",
+      "description": "Rolling 1-hour counts of detected landings and take-offs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 318
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(airport:arrivals:count1h)",
+          "legendFormat": "landings (all Tunisian airports)"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(airport:departures:count1h)",
+          "legendFormat": "take-offs (all Tunisian airports)"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "airport:arrivals:count1h > 0",
+          "legendFormat": "landings · {{airport}}"
+        }
+      ],
+      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "text",
+      "id": 43,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 327
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "```hcl\nresource \"grafana_machine_learning_job\" \"airport_arrivals_forecast\" {\n  name            = \"Arrivals per Tunisian airport per hour\"\n  metric          = \"tunisia_airport_arrivals\"\n  datasource_type = \"prometheus\"\n  datasource_uid  = var.prometheus_uid\n  query_params    = { expr = \"sum by (airport) (increase(airport_arrivals_total[1h]))\" }\n  interval        = 300\n  training_window = 2592000 # 30 days\n}\n```"
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 44,
+      "title": "Grafana ML forecast: landings per hour, per airport",
+      "description": "Grafana Cloud Machine Learning. One model per airport; the daily schedule needs 2+ days of history, the weekly one 2+ weeks.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-ml-metrics"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 335
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-ml-metrics"
+          },
+          "expr": "tunisia_airport_arrivals:predicted{ml_forecast=\"yhat\"}",
+          "legendFormat": "forecast · {{airport}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-ml-metrics"
+          },
+          "expr": "tunisia_airport_arrivals:actual",
+          "legendFormat": "actual · {{airport}}"
+        }
+      ],
+      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "forecast.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "text",
+      "id": 45,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 344
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## 5. Use case: forecast monitoring capacity\n\nForecasting also protects the observability stack itself. Grafana Cloud bills by **active series**,\nand the free tier allows **10,000**. Every new flight creates new series (its position, altitude,\nspeed…), so the count grows with traffic. Will we hit the limit next week? `predict_linear` projects the\nlast 6 hours 7 days ahead, and an alert fires when the projection passes 90% of the limit.\n\n`count({__name__=~\".+\"})` over the pipeline's series matches Grafana Cloud's own billing metric\n(`grafanacloud_instance_active_series`: 387 vs. 388 when this was measured)."
+      }
+    },
+    {
+      "type": "text",
+      "id": 46,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 351
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "```yaml\n- record: monitoring:active_series\n  expr: count({__name__=~\".+\"})\n- record: monitoring:active_series:predicted_7d\n  expr: predict_linear(monitoring:active_series[6h], 7 * 86400)\n- record: monitoring:active_series:days_to_limit\n  expr: |\n    (scalar(monitoring:active_series:limit) - monitoring:active_series)\n    / (deriv(monitoring:active_series[6h]) * 86400) > 0\n\n- alert: ActiveSeriesLimitWithin7Days\n  expr: monitoring:active_series:predicted_7d > 0.9 * scalar(monitoring:active_series:limit)\n  for: 1h\n  labels: { pillar: capacity, team: data-engineering, severity: warning }\n```"
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 47,
+      "title": "Active series: now, projected in 7 days, and the free-tier limit",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 361
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monitoring:active_series",
+          "legendFormat": "active series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monitoring:active_series:predicted_7d",
+          "legendFormat": "projected in 7 days"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "monitoring:active_series:limit",
+          "legendFormat": "free-tier limit"
+        }
+      ],
+      "options": {},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "projected in 7 days"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "free-tier limit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "stat",
+      "id": 48,
+      "title": "Days until the limit at the current growth rate",
+      "description": "999 means the series count is not growing.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 370
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "min(monitoring:active_series:days_to_limit) or vector(999)",
+          "legendFormat": "days"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 0,
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "999": {
+                  "text": "Not growing",
+                  "index": 0
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 7
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "text",
+      "id": 49,
+      "title": "",
+      "transparent": true,
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 376
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Summary\n\n| Question | Method | Rule / job |\n|---|---|---|\n| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |\n| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the\nquestions your users actually ask."
       }
     }
   ]

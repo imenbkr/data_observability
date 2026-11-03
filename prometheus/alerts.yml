@@ -73,3 +73,12 @@ groups:
         labels: { pillar: volume, team: data-engineering, severity: warning }
         annotations:
           summary: "Only {{ $value | humanize }} flight positions in the last hour, below the forecast's lower bound"
+
+  - name: capacity-alerts
+    rules:
+      - alert: ActiveSeriesLimitWithin7Days
+        expr: monitoring:active_series:predicted_7d > 0.9 * scalar(monitoring:active_series:limit)
+        for: 1h
+        labels: { pillar: capacity, team: data-engineering, severity: warning }
+        annotations:
+          summary: "At the current growth rate, active series reach {{ $value | humanize }} within 7 days (limit 10,000)"

@@ -19,7 +19,7 @@ ML_DS_UID = "__ML_DATASOURCE_UID__"
 ML_METRIC = "tunisia_flight_positions"
 RULES = "prometheus/rules.yml"
 ALERTS = "prometheus/alerts.yml"
-IMAGES = OUT.parent / "images"  # taken by scripts/take_screenshots.py
+IMAGES = OUT.parent / "images"  # screenshots of the running stack
 
 elements = {}
 layout = []
@@ -97,6 +97,11 @@ How you detect a drop depends on **how often data arrives**:
 1. **High ingestion frequency:** a continuous stream, compared with a baseline.
 2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.
 3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.
+
+Then two forecasting use cases that answer real questions:
+
+4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.
+5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan.
 """)
 
 # --- Part 1: high frequency -----------------------------------------------------------------
@@ -372,17 +377,127 @@ code("ml-alert-code", "promql", f"""
 {ML_METRIC}:predicted{{ml_forecast="yhat_lower"}}
 """)
 
+# --- Part 4: airport arrivals ---------------------------------------------------------------
+md("arrivals-title", """
+## 4. Use case: forecast arrivals at Tunisian airports
+
+Forecasting is most useful when it answers an operational question. Ground handling, border control,
+taxis and people waiting at the airport all ask the same one: **how many planes will land at Tunis,
+Enfidha, Monastir or Djerba in the coming hours?** The pipeline answers it on two horizons:
+
+| Horizon | Method | Source |
+|---|---|---|
+| Next 30 min, 1 h, 2 h | Count tracked flights whose estimated arrival falls in the window | Live positions: distance left ÷ ground speed |
+| Next 24 h and beyond | Grafana Machine Learning forecast of landings per hour, per airport | History of detected landings; learns the daily and weekly schedule |
+""")
+panel("arrivals-expected", "Expected arrivals at Tunisian airports", "bargauge",
+      [('max by (airport) (airport_expected_arrivals{within="30m"})', "{{airport}} · 30 min"),
+       ('max by (airport) (airport_expected_arrivals{within="1h"})', "{{airport}} · 1 h"),
+       ('max by (airport) (airport_expected_arrivals{within="2h"})', "{{airport}} · 2 h")],
+      description="Flights currently tracked toward each Tunisian airport, by estimated arrival time. Airports with no traffic are hidden.",
+      options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+               "reduceOptions": {"calcs": ["lastNotNull"]}, "valueMode": "color", "namePlacement": "left"},
+      defaults={"unit": "short", "decimals": 0, "min": 0, "noValue": "None expected",
+                "thresholds": {"mode": "absolute", "steps": [{"color": "blue", "value": None}]}},
+      overrides=[{"matcher": {"id": "byValue", "options": {"reducer": "max", "op": "lte", "value": 0}},
+                  "properties": [{"id": "custom.hideFrom", "value": {"viz": True, "legend": True, "tooltip": True}}]}])
+md("arrivals-detect", f"""
+**Counting landings.** ADS-B has no "landed" message, so the quality checker detects it: a flight to a
+Tunisian airport counts as **landed** when it is below {4000:,} ft within 25 km of the airport. Receiver
+coverage near the ground in Tunisia is thin, so a flight that **disappears within 80 km** of its
+destination also counts (`detection="lost_near_destination"`). Take-offs are counted the same way near
+the departure airport. These counts are the training data for the forecast.
+""")
+code("arrivals-rules", "yaml", """
+- record: airport:arrivals:count1h
+  expr: sum by (airport) (increase(airport_arrivals_total[1h]))
+- record: airport:departures:count1h
+  expr: sum by (airport) (increase(airport_departures_total[1h]))
+""")
+panel("arrivals-hourly", "Landings and take-offs per hour", "timeseries",
+      [("sum(airport:arrivals:count1h)", "landings (all Tunisian airports)"),
+       ("sum(airport:departures:count1h)", "take-offs (all Tunisian airports)"),
+       ("airport:arrivals:count1h > 0", "landings · {{airport}}")],
+      description="Rolling 1-hour counts of detected landings and take-offs.",
+      defaults={"unit": "short", "decimals": 0})
+code("arrivals-ml-code", "hcl", """
+resource "grafana_machine_learning_job" "airport_arrivals_forecast" {
+  name            = "Arrivals per Tunisian airport per hour"
+  metric          = "tunisia_airport_arrivals"
+  datasource_type = "prometheus"
+  datasource_uid  = var.prometheus_uid
+  query_params    = { expr = "sum by (airport) (increase(airport_arrivals_total[1h]))" }
+  interval        = 300
+  training_window = 2592000 # 30 days
+}
+""")
+panel("arrivals-ml", "Grafana ML forecast: landings per hour, per airport", "timeseries",
+      [('tunisia_airport_arrivals:predicted{ml_forecast="yhat"}', "forecast · {{airport}}"),
+       ("tunisia_airport_arrivals:actual", "actual · {{airport}}")],
+      description="Grafana Cloud Machine Learning. One model per airport; the daily schedule needs 2+ days of history, the weekly one 2+ weeks.",
+      defaults={"unit": "short", "decimals": 1},
+      overrides=[{"matcher": {"id": "byRegexp", "options": "forecast.*"},
+                  "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}}]}],
+      datasource=ML_DS_UID)
+
+# --- Part 5: monitoring capacity -----------------------------------------------------------
+md("capacity-title", """
+## 5. Use case: forecast monitoring capacity
+
+Forecasting also protects the observability stack itself. Grafana Cloud bills by **active series**,
+and the free tier allows **10,000**. Every new flight creates new series (its position, altitude,
+speed…), so the count grows with traffic. Will we hit the limit next week? `predict_linear` projects the
+last 6 hours 7 days ahead, and an alert fires when the projection passes 90% of the limit.
+
+`count({__name__=~".+"})` over the pipeline's series matches Grafana Cloud's own billing metric
+(`grafanacloud_instance_active_series`: 387 vs. 388 when this was measured).
+""")
+code("capacity-rules", "yaml", """
+- record: monitoring:active_series
+  expr: count({__name__=~".+"})
+- record: monitoring:active_series:predicted_7d
+  expr: predict_linear(monitoring:active_series[6h], 7 * 86400)
+- record: monitoring:active_series:days_to_limit
+  expr: |
+    (scalar(monitoring:active_series:limit) - monitoring:active_series)
+    / (deriv(monitoring:active_series[6h]) * 86400) > 0
+
+- alert: ActiveSeriesLimitWithin7Days
+  expr: monitoring:active_series:predicted_7d > 0.9 * scalar(monitoring:active_series:limit)
+  for: 1h
+  labels: { pillar: capacity, team: data-engineering, severity: warning }
+""")
+panel("capacity-panel", "Active series: now, projected in 7 days, and the free-tier limit", "timeseries",
+      [("monitoring:active_series", "active series"),
+       ("monitoring:active_series:predicted_7d", "projected in 7 days"),
+       ("monitoring:active_series:limit", "free-tier limit")],
+      defaults={"unit": "short", "decimals": 0, "min": 0},
+      overrides=[by_name("projected in 7 days", custom__lineStyle={"fill": "dash", "dash": [10, 10]},
+                         color={"mode": "fixed", "fixedColor": "orange"}),
+                 by_name("free-tier limit", color={"mode": "fixed", "fixedColor": "red"}, custom__lineWidth=2)])
+panel("capacity-days", "Days until the limit at the current growth rate", "stat",
+      [("min(monitoring:active_series:days_to_limit) or vector(999)", "days")],
+      description="999 means the series count is not growing.",
+      options={"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "none"},
+      defaults={"unit": "d", "decimals": 0, "mappings": [{"type": "value", "options": {"999": {"text": "Not growing", "index": 0}}}],
+                "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": None},
+                                                             {"color": "orange", "value": 7},
+                                                             {"color": "green", "value": 30}]}})
+
 md("summary", """
 ## Summary
 
-| Data arrives… | Detect drops with | Rule |
+| Question | Method | Rule / job |
 |---|---|---|
-| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |
-| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |
-| With a daily or weekly cycle | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |
+| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |
+| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |
+| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |
+| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |
+| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |
 
 Start with volume: it is the cheapest check and catches the most incidents. Then move from
-simple baselines to seasonal and ML forecasts as history accumulates.
+simple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the
+questions your users actually ask.
 """)
 
 notebook = {

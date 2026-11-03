@@ -90,3 +90,29 @@ groups:
         expr: clamp_min(flights:positions:seasonal_mean - 1.645 * flights:positions:seasonal_stddev, 0)
       - record: flights:positions:seasonal_upper
         expr: flights:positions:seasonal_mean + 1.645 * flights:positions:seasonal_stddev
+
+  # Use case: arrivals and departures per Tunisian airport (forecast with Grafana ML)
+  - name: airport-traffic
+    interval: 5m
+    rules:
+      - record: airport:arrivals:count1h
+        expr: sum by (airport) (increase(airport_arrivals_total[1h]))
+      - record: airport:departures:count1h
+        expr: sum by (airport) (increase(airport_departures_total[1h]))
+
+  # Use case: monitoring capacity. Active series drive the Grafana Cloud bill and the free
+  # tier allows 10,000. count() over all series matches grafanacloud_instance_active_series.
+  - name: monitoring-capacity
+    interval: 5m
+    rules:
+      - record: monitoring:active_series
+        expr: count({__name__=~".+"})
+      - record: monitoring:active_series:limit
+        expr: vector(10000)
+      - record: monitoring:active_series:predicted_7d
+        expr: predict_linear(monitoring:active_series[6h], 7 * 86400)
+      # Days until the limit at the current growth rate (only while growing)
+      - record: monitoring:active_series:days_to_limit
+        expr: |
+          (scalar(monitoring:active_series:limit) - monitoring:active_series)
+          / (deriv(monitoring:active_series[6h]) * 86400) > 0

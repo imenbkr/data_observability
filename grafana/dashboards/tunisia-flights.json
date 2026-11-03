@@ -1192,7 +1192,7 @@
     },
     {
       "type": "row",
-      "title": "Data health at a glance",
+      "title": "Arrivals at Tunisian airports",
       "id": 5,
       "collapsed": false,
       "gridPos": {
@@ -1204,10 +1204,797 @@
       "panels": []
     },
     {
+      "type": "bargauge",
+      "title": "Expected in the next hour",
+      "description": "Tracked flights whose estimated arrival is within 1 hour. Airports with none are hidden.",
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 0,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "min": 0,
+          "noValue": "None expected",
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "max by (airport) (airport_expected_arrivals{within=\"1h\"}) > 0",
+          "legendFormat": "{{airport}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Expected in the next 2 hours",
+      "description": "",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 6,
+        "x": 6,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "min": 0,
+          "noValue": "None expected",
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "max by (airport) (airport_expected_arrivals{within=\"2h\"}) > 0",
+          "legendFormat": "{{airport}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Next arrivals",
+      "description": "Flights to Tunisian airports, soonest first. Estimated arrival = distance left ÷ current speed.",
+      "id": 8,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "Arrival": {
+                        "text": "Arrival ↘",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "Departure": {
+                        "text": "Departure ↗",
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "Domestic": {
+                        "text": "Domestic",
+                        "color": "purple",
+                        "index": 2
+                      },
+                      "Via Tunisia": {
+                        "text": "Via Tunisia",
+                        "color": "text",
+                        "index": 3
+                      },
+                      "Unknown": {
+                        "text": "Unknown",
+                        "color": "orange",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "On ground",
+                        "color": "text",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "Climbing ↑",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "2": {
+                        "text": "Cruising",
+                        "color": "blue",
+                        "index": 2
+                      },
+                      "3": {
+                        "text": "Descending ↓",
+                        "color": "orange",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Altitude"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "lengthft"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#8AB8FF",
+                      "value": null
+                    },
+                    {
+                      "color": "#5794F2",
+                      "value": 10000
+                    },
+                    {
+                      "color": "#1F60C4",
+                      "value": 25000
+                    },
+                    {
+                      "color": "#FF9830",
+                      "value": 33000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Speed"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "velocitykmh"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Distance left"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: km"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Arrival (est.)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time:HH:mm"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tracked since"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "time:HH:mm"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last update"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "latitude"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "longitude"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Heading"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Registration"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Flight"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Airline"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Aircraft"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 135
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Altitude"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Speed"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Distance left"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Arrival (est.)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tracked since"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last update"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Airline"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Direction"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Aircraft"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Speed"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tracked since"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "A",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_latitude{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "B",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_longitude{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "C",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_heading_degrees{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "D",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_phase{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "E",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_altitude_feet{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "F",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_speed_kmh{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "G",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_distance_left_km{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "H",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_eta_timestamp_ms{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "I",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_tracked_since_timestamp_ms{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "refId": "J",
+          "expr": "max by (flight, airline, direction, origin, destination, aircraft, registration) (flight_last_update_timestamp_ms{airline=~\"$airline\", direction=~\"Arrival|Domestic\"})",
+          "legendFormat": "__auto",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Arrival (est.)"
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "latitude",
+              "Value #B": "longitude",
+              "Value #C": "Heading",
+              "Value #D": "Status",
+              "Value #E": "Altitude",
+              "Value #F": "Speed",
+              "Value #G": "Distance left",
+              "Value #H": "Arrival (est.)",
+              "Value #I": "Tracked since",
+              "Value #J": "Last update",
+              "flight": "Flight",
+              "airline": "Airline",
+              "direction": "Direction",
+              "origin": "From",
+              "destination": "To",
+              "aircraft": "Aircraft",
+              "registration": "Registration"
+            },
+            "indexByName": {
+              "Value #D": 5,
+              "Value #E": 7,
+              "Value #F": 8,
+              "Value #G": 9,
+              "Value #H": 10,
+              "Value #I": 11,
+              "Value #J": 12,
+              "flight": 0,
+              "airline": 1,
+              "direction": 2,
+              "origin": 3,
+              "destination": 4,
+              "aircraft": 6,
+              "registration": 13
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Data health at a glance",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "panels": []
+    },
+    {
       "type": "stat",
       "title": "Flights tracked now",
       "description": "",
-      "id": 6,
+      "id": 10,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1216,7 +2003,7 @@
         "h": 5,
         "w": 4,
         "x": 0,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1259,7 +2046,7 @@
       "type": "stat",
       "title": "Positions received / min",
       "description": "",
-      "id": 7,
+      "id": 11,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1268,7 +2055,7 @@
         "h": 5,
         "w": 4,
         "x": 4,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1311,7 +2098,7 @@
       "type": "stat",
       "title": "Data age (95% under)",
       "description": "How old a plane position is when we process it. 95% of positions are newer than this.",
-      "id": 8,
+      "id": 12,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1320,7 +2107,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1371,7 +2158,7 @@
       "type": "stat",
       "title": "Rejected messages",
       "description": "",
-      "id": 9,
+      "id": 13,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1380,7 +2167,7 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1431,7 +2218,7 @@
       "type": "stat",
       "title": "Messages delivered",
       "description": "Messages received by the quality checker / messages sent to Kafka.",
-      "id": 10,
+      "id": 14,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1440,7 +2227,7 @@
         "h": 5,
         "w": 4,
         "x": 16,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1491,7 +2278,7 @@
       "type": "stat",
       "title": "Active alerts",
       "description": "",
-      "id": 11,
+      "id": 15,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1500,7 +2287,7 @@
         "h": 5,
         "w": 4,
         "x": 20,
-        "y": 36
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -1548,13 +2335,13 @@
     {
       "type": "row",
       "title": "1 · Volume: are we receiving as much data as usual?",
-      "id": 12,
+      "id": 16,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 51
       },
       "panels": []
     },
@@ -1562,7 +2349,7 @@
       "type": "timeseries",
       "title": "Flights tracked: today vs. yesterday",
       "description": "Tunisian air traffic has a daily rhythm (quiet at night, busy in the morning). Yesterday is the baseline; a big gap means a problem.",
-      "id": 13,
+      "id": 17,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1571,7 +2358,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 42
+        "y": 52
       },
       "fieldConfig": {
         "defaults": {
@@ -1630,7 +2417,7 @@
       "type": "timeseries",
       "title": "Planes seen by the tracking network",
       "description": "All aircraft adsb.lol reports over our areas, and how many are flying to/from Tunisia. If 'all aircraft' drops too, the problem is the source, not Tunisian traffic.",
-      "id": 14,
+      "id": 18,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1639,7 +2426,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 42
+        "y": 52
       },
       "fieldConfig": {
         "defaults": {
@@ -1684,13 +2471,13 @@
     {
       "type": "row",
       "title": "2 · Freshness: how recent is the data?",
-      "id": 15,
+      "id": 19,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 60
       },
       "panels": []
     },
@@ -1698,7 +2485,7 @@
       "type": "timeseries",
       "title": "Data age when processed",
       "description": "Time between the plane sending its position and our pipeline processing it. Mostly the 60 s polling interval.",
-      "id": 16,
+      "id": 20,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1707,7 +2494,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 51
+        "y": 61
       },
       "fieldConfig": {
         "defaults": {
@@ -1740,7 +2527,7 @@
       "type": "timeseries",
       "title": "Where the time goes (95th percentile)",
       "description": "source_to_api: radio receiver → adsb.lol · api_to_kafka: our producer · kafka_to_consumer: Kafka → quality checker.",
-      "id": 17,
+      "id": 21,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1749,7 +2536,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 51
+        "y": 61
       },
       "fieldConfig": {
         "defaults": {
@@ -1779,7 +2566,7 @@
       "type": "timeseries",
       "title": "Time since last data pull",
       "description": "Should stay around 60 s. Above 5 minutes the 'PipelineStalled' alert fires.",
-      "id": 18,
+      "id": 22,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1788,7 +2575,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 51
+        "y": 61
       },
       "fieldConfig": {
         "defaults": {
@@ -1829,13 +2616,13 @@
     {
       "type": "row",
       "title": "3 · Schema: is the data in the expected format?",
-      "id": 19,
+      "id": 23,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 69
       },
       "panels": []
     },
@@ -1843,7 +2630,7 @@
       "type": "timeseries",
       "title": "Rejected messages by reason",
       "description": "e.g. missing_position: the plane was heard but without coordinates.",
-      "id": 20,
+      "id": 24,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1852,7 +2639,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 60
+        "y": 70
       },
       "fieldConfig": {
         "defaults": {
@@ -1883,7 +2670,7 @@
       "type": "timeseries",
       "title": "Fields per plane record (min / max)",
       "description": "Different transponders send different fields, so some variation is normal. A sudden jump means adsb.lol changed its format.",
-      "id": 21,
+      "id": 25,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1892,7 +2679,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 60
+        "y": 70
       },
       "fieldConfig": {
         "defaults": {
@@ -1928,7 +2715,7 @@
       "type": "timeseries",
       "title": "Flights with unknown route",
       "description": "Flight numbers missing from our route list (data/routes.csv). If this grows, refresh it with 'make routes'.",
-      "id": 22,
+      "id": 26,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1937,7 +2724,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 60
+        "y": 70
       },
       "fieldConfig": {
         "defaults": {
@@ -1960,13 +2747,13 @@
     {
       "type": "row",
       "title": "4 · Distribution: do the values look normal?",
-      "id": 23,
+      "id": 27,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 78
       },
       "panels": []
     },
@@ -1974,7 +2761,7 @@
       "type": "bargauge",
       "title": "Top 10 airlines in the air",
       "description": "If one airline suddenly disappears, check its flight numbers in the route list.",
-      "id": 24,
+      "id": 28,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1983,7 +2770,7 @@
         "h": 10,
         "w": 8,
         "x": 0,
-        "y": 69
+        "y": 79
       },
       "fieldConfig": {
         "defaults": {
@@ -2019,7 +2806,7 @@
       "type": "bargauge",
       "title": "Countries connected to Tunisia right now",
       "description": "For arrivals: the country of departure. For departures: the destination country.",
-      "id": 25,
+      "id": 29,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2028,7 +2815,7 @@
         "h": 10,
         "w": 8,
         "x": 8,
-        "y": 69
+        "y": 79
       },
       "fieldConfig": {
         "defaults": {
@@ -2064,7 +2851,7 @@
       "type": "piechart",
       "title": "Arrivals vs. departures",
       "description": "",
-      "id": 26,
+      "id": 30,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2073,7 +2860,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 69
+        "y": 79
       },
       "fieldConfig": {
         "defaults": {
@@ -2190,7 +2977,7 @@
       "type": "piechart",
       "title": "Aircraft models in the air",
       "description": "",
-      "id": 27,
+      "id": 31,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2199,7 +2986,7 @@
         "h": 5,
         "w": 8,
         "x": 16,
-        "y": 74
+        "y": 84
       },
       "fieldConfig": {
         "defaults": {
@@ -2240,7 +3027,7 @@
       "type": "bargauge",
       "title": "Altitude of positions (last 24h)",
       "description": "Most positions should be at cruising altitude (30,000–40,000 ft).",
-      "id": 28,
+      "id": 32,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2249,7 +3036,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 79
+        "y": 89
       },
       "fieldConfig": {
         "defaults": {
@@ -2284,13 +3071,13 @@
     {
       "type": "row",
       "title": "5 · Lineage: where does the data come from, and does it all arrive?",
-      "id": 29,
+      "id": 33,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 96
       },
       "panels": []
     },
@@ -2298,7 +3085,7 @@
       "type": "stat",
       "title": "① Planes seen by adsb.lol",
       "description": "Last hour",
-      "id": 30,
+      "id": 34,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2307,7 +3094,7 @@
         "h": 5,
         "w": 4,
         "x": 0,
-        "y": 87
+        "y": 97
       },
       "fieldConfig": {
         "defaults": {
@@ -2352,7 +3139,7 @@
       "type": "stat",
       "title": "② Tunisia flights kept",
       "description": "Last hour",
-      "id": 31,
+      "id": 35,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2361,7 +3148,7 @@
         "h": 5,
         "w": 4,
         "x": 4,
-        "y": 87
+        "y": 97
       },
       "fieldConfig": {
         "defaults": {
@@ -2406,7 +3193,7 @@
       "type": "stat",
       "title": "③ Sent to Kafka",
       "description": "Last hour",
-      "id": 32,
+      "id": 36,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2415,7 +3202,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 87
+        "y": 97
       },
       "fieldConfig": {
         "defaults": {
@@ -2460,7 +3247,7 @@
       "type": "stat",
       "title": "④ Received by quality checker",
       "description": "Last hour",
-      "id": 33,
+      "id": 37,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2469,7 +3256,7 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 87
+        "y": 97
       },
       "fieldConfig": {
         "defaults": {
@@ -2514,7 +3301,7 @@
       "type": "stat",
       "title": "⑤ Passed all checks",
       "description": "Last hour",
-      "id": 34,
+      "id": 38,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2523,7 +3310,7 @@
         "h": 5,
         "w": 4,
         "x": 16,
-        "y": 87
+        "y": 97
       },
       "fieldConfig": {
         "defaults": {
@@ -2567,12 +3354,12 @@
     {
       "type": "text",
       "title": "Data sources",
-      "id": 35,
+      "id": 39,
       "gridPos": {
         "h": 5,
         "w": 4,
         "x": 20,
-        "y": 87
+        "y": 97
       },
       "options": {
         "mode": "markdown",
@@ -2583,7 +3370,7 @@
       "type": "timeseries",
       "title": "Requests to adsb.lol by area",
       "description": "Status 200 = OK. Anything else (or 'error') means adsb.lol did not answer correctly.",
-      "id": 36,
+      "id": 40,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2592,7 +3379,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 102
       },
       "fieldConfig": {
         "defaults": {
@@ -2623,7 +3410,7 @@
       "type": "timeseries",
       "title": "adsb.lol response time (95th percentile)",
       "description": "",
-      "id": 37,
+      "id": 41,
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -2632,7 +3419,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 102
       },
       "fieldConfig": {
         "defaults": {

@@ -104,6 +104,8 @@ def to_message(ac, api_now, fetched_at, area, routes):
         "origin": route.get("origin"),
         "origin_city": route.get("origin_city"),
         "origin_country": route.get("origin_country"),
+        "origin_lat": coord(route, "origin_lat"),
+        "origin_lon": coord(route, "origin_lon"),
         "destination": route.get("destination"),
         "destination_city": route.get("destination_city"),
         "destination_country": route.get("destination_country"),

@@ -162,6 +162,28 @@ panel("table", "Flights", FLIGHT_QUERIES, 0, 24, 13, transformations=FLIGHT_TRAN
       options={"showHeader": True, "sortBy": [{"displayName": "Arrival (est.)"}], "cellHeight": "sm"})
 y += 13
 
+row("Arrivals at Tunisian airports")
+ARRIVAL_FILTER = '{airline=~"$airline", direction=~"Arrival|Domestic"}'
+ARRIVAL_QUERIES = [q(f"max by ({FLIGHT_BY}) (flight_{m}{ARRIVAL_FILTER})", instant=True, fmt="table")
+                   for m, _ in ATTRIBUTES]
+panel("bargauge", "Expected in the next hour", [q('max by (airport) (airport_expected_arrivals{within="1h"}) > 0',
+                                                  "{{airport}}", instant=True)],
+      0, 6, 9, "short", desc="Tracked flights whose estimated arrival is within 1 hour. Airports with none are hidden.",
+      options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+               "reduceOptions": {"calcs": ["lastNotNull"]}}, defaults={"decimals": 0, "min": 0, "noValue": "None expected"},
+      thresholds=steps((None, "blue")))
+panel("bargauge", "Expected in the next 2 hours", [q('max by (airport) (airport_expected_arrivals{within="2h"}) > 0',
+                                                     "{{airport}}", instant=True)],
+      6, 6, 9, "short", options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+                                 "reduceOptions": {"calcs": ["lastNotNull"]}}, defaults={"decimals": 0, "min": 0, "noValue": "None expected"},
+      thresholds=steps((None, "purple")))
+panel("table", "Next arrivals", ARRIVAL_QUERIES, 12, 12, 9, transformations=FLIGHT_TRANSFORMS,
+      overrides=FLIGHT_OVERRIDES + [by_name(c, ("custom.hidden", True))
+                                    for c in ("Airline", "Direction", "Status", "Aircraft", "Speed", "Tracked since")],
+      desc="Flights to Tunisian airports, soonest first. Estimated arrival = distance left ÷ current speed.",
+      options={"showHeader": True, "sortBy": [{"displayName": "Arrival (est.)"}], "cellHeight": "sm"})
+y += 9
+
 row("Data health at a glance")
 panel("stat", "Flights tracked now", [q("flights_active")], 0, 4, 5, "short", options=STAT, thresholds=steps((None, "blue")))
 panel("stat", "Positions received / min", [q("flights:messages:per_minute")], 4, 4, 5, "short", options=STAT, thresholds=steps((None, "blue")))

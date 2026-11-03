@@ -29,6 +29,18 @@ AIRCRAFT_NAMES = {
     "E195": "Embraer E195", "E295": "Embraer E195-E2", "CRJ9": "Bombardier CRJ900",
     "AT75": "ATR 72-500", "AT76": "ATR 72-600", "DH8D": "Dash 8-400",
 }
+# Tunisian airports (ICAO -> label used in metrics)
+TUNISIAN_AIRPORTS = {
+    "DTTA": "Tunis-Carthage (DTTA)", "DTNH": "Enfidha-Hammamet (DTNH)", "DTMB": "Monastir (DTMB)",
+    "DTTJ": "Djerba-Zarzis (DTTJ)", "DTTX": "Sfax (DTTX)", "DTTZ": "Tozeur (DTTZ)",
+    "DTTG": "Gabès (DTTG)", "DTKA": "Tabarka (DTKA)",
+}
+ETA_WINDOWS = {"30m": 1800, "1h": 3600, "2h": 7200}
+# Landing / take-off detection: close to the airport and low
+LANDED_KM, LANDED_FT = 25, 4000
+LOST_NEAR_DESTINATION_KM = 80  # coverage near the ground is thin: a flight lost this close has landed
+DEPARTED_KM, DEPARTED_FT = 40, 10000
+
 # Flight phase, shown with value mappings in Grafana
 ON_GROUND, CLIMBING, CRUISING, DESCENDING = 0, 1, 2, 3
 
@@ -58,6 +70,19 @@ by_direction = Gauge("flights_active_by_direction", "Active flights per directio
 by_type = Gauge("flights_active_by_type", "Active flights per aircraft type", ["aircraft"])
 altitude = Histogram("flights_altitude_feet", "Reported altitude of airborne aircraft",
                      buckets=[1000, 5000, 10000, 20000, 30000, 35000, 40000])
+# Airports (forecasting use case: arrivals per Tunisian airport)
+expected_arrivals = Gauge("airport_expected_arrivals", "Tracked flights expected to land within the window",
+                          ["airport", "within"])
+arrivals = Counter("airport_arrivals_total", "Detected landings at Tunisian airports", ["airport", "detection"])
+departures = Counter("airport_departures_total", "Detected take-offs from Tunisian airports", ["airport"])
+for _a in TUNISIAN_AIRPORTS.values():
+    departures.labels(_a)
+    for _d in ("landed", "lost_near_destination"):
+        arrivals.labels(_a, _d)
+    for _w in ETA_WINDOWS:
+        expected_arrivals.labels(_a, _w)
+counted = {}  # (hex, callsign, event) -> time, so each landing / take-off counts once
+
 # Live flights (map + table): one gauge per attribute, all with the same flight labels
 FLIGHT_GAUGES = {name: Gauge(f"flight_{name}", doc, FLIGHT_LABELS) for name, doc in [
     ("latitude", "Last latitude"),
@@ -72,7 +97,8 @@ FLIGHT_GAUGES = {name: Gauge(f"flight_{name}", doc, FLIGHT_LABELS) for name, doc
     ("last_update_timestamp_ms", "Time of the last received position"),
 ]}
 
-flights = {}  # hex -> {"seen", "first_seen", "labels", "country", "airline", "direction", "type", "fields", "shape"}
+flights = {}  # hex -> {"seen", "first_seen", "labels", "country", "airline", "direction", "type", "fields",
+              #         "shape", "callsign", "destination", "eta", "left"}
 
 
 def place(city, code):
@@ -95,6 +121,25 @@ def phase(rec):
     if rate < -500:
         return DESCENDING
     return CRUISING
+
+
+def count_once(rec, event, counter):
+    key = (rec["hex"], rec["callsign"], event)
+    if key not in counted:
+        counted[key] = time.time()
+        counter.inc()
+
+
+def detect_airport_events(rec, alt, left):
+    """Count landings at and take-offs from Tunisian airports."""
+    dest = TUNISIAN_AIRPORTS.get(rec.get("destination") or "")
+    if dest and left is not None and left < LANDED_KM and alt < LANDED_FT:
+        count_once(rec, "arrival", arrivals.labels(dest, "landed"))
+    origin = TUNISIAN_AIRPORTS.get(rec.get("origin") or "")
+    if origin and rec.get("origin_lat") is not None and alt < DEPARTED_FT and \
+            distance_km(rec["lat"], rec["lon"], rec["origin_lat"], rec["origin_lon"]) < DEPARTED_KM and \
+            phase(rec) in (CLIMBING, CRUISING):
+        count_once(rec, "departure", departures.labels(origin))
 
 
 def check(msg):
@@ -152,6 +197,7 @@ def record(rec, kafka_ts):
         "last_update_timestamp_ms": rec["position_ts"] * 1000,
     }
     dest_lat, dest_lon = rec.get("destination_lat"), rec.get("destination_lon")
+    left = None
     if dest_lat is not None and dest_lon is not None:
         left = distance_km(rec["lat"], rec["lon"], dest_lat, dest_lon)
         values["distance_left_km"] = left
@@ -160,6 +206,7 @@ def record(rec, kafka_ts):
     for name, gauge in FLIGHT_GAUGES.items():
         if name in values:
             gauge.labels(*labels).set(values[name])
+    detect_airport_events(rec, alt, left)
 
     flights[rec["hex"]] = {
         "seen": now, "first_seen": old["first_seen"] if old else rec["position_ts"], "labels": labels,
@@ -169,6 +216,8 @@ def record(rec, kafka_ts):
         "type": aircraft,
         "fields": rec.get("raw_field_count", 0),
         "shape": frozenset(rec),
+        "callsign": rec["callsign"], "hex": rec["hex"], "destination": rec.get("destination"),
+        "eta": values.get("eta_timestamp_ms", 0) / 1000 or None, "left": left,
     }
 
 
@@ -184,10 +233,26 @@ def refresh_window():
     now = time.time()
     for hex_, f in list(flights.items()):
         if now - f["seen"] > ACTIVE_WINDOW:
+            # lost from coverage close to a Tunisian destination: it has landed
+            dest = TUNISIAN_AIRPORTS.get(f["destination"] or "")
+            if dest and f["left"] is not None and f["left"] < LOST_NEAR_DESTINATION_KM:
+                count_once(f, "arrival", arrivals.labels(dest, "lost_near_destination"))
             remove_flight(f)
             del flights[hex_]
+    for key, t in list(counted.items()):
+        if now - t > 6 * 3600:
+            del counted[key]
     live = list(flights.values())
     active.set(len(live))
+    for airport in TUNISIAN_AIRPORTS.values():
+        for window in ETA_WINDOWS:
+            expected_arrivals.labels(airport, window).set(0)
+    for f in live:
+        airport = TUNISIAN_AIRPORTS.get(f["destination"] or "")
+        if airport and f["eta"] and (f["hex"], f["callsign"], "arrival") not in counted:
+            for window, seconds in ETA_WINDOWS.items():
+                if f["eta"] - now <= seconds:
+                    expected_arrivals.labels(airport, window).inc()
     for g in (by_country, by_airline, by_direction, by_type):
         g.clear()
     for f in live:

@@ -104,6 +104,18 @@ resource "grafana_machine_learning_alert" "flight_positions_drop" {
   annotations       = { summary = "Hourly flight positions are below the Grafana ML forecast interval" }
 }
 
+# Use case: forecast hourly arrivals per Tunisian airport (one series per airport)
+resource "grafana_machine_learning_job" "airport_arrivals_forecast" {
+  name            = "Arrivals per Tunisian airport per hour"
+  description     = "Forecast of hourly landings per Tunisian airport; learns the daily and weekly flight schedule"
+  metric          = "tunisia_airport_arrivals"
+  datasource_type = "prometheus"
+  datasource_uid  = var.prometheus_uid
+  query_params    = { expr = "sum by (airport) (increase(airport_arrivals_total[1h]))" }
+  interval        = 300
+  training_window = 2592000 # 30 days
+}
+
 output "notebook_url" {
   value = var.enable_notebook ? "${var.grafana_url}/notebooks/detect-data-volume-drops" : null
 }

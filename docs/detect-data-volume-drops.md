@@ -14,6 +14,11 @@ How you detect a drop depends on **how often data arrives**:
 2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.
 3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.
 
+Then two forecasting use cases that answer real questions:
+
+4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.
+5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan.
+
 ### The data
 
 The live dashboard tracks every flight to and from Tunisia, and each position is one record on the
@@ -315,13 +320,135 @@ tunisia_flight_positions:actual
 tunisia_flight_positions:predicted{ml_forecast="yhat_lower"}
 ```
 
+## 4. Use case: forecast arrivals at Tunisian airports
+
+Forecasting is most useful when it answers an operational question. Ground handling, border control,
+taxis and people waiting at the airport all ask the same one: **how many planes will land at Tunis,
+Enfidha, Monastir or Djerba in the coming hours?** The pipeline answers it on two horizons:
+
+| Horizon | Method | Source |
+|---|---|---|
+| Next 30 min, 1 h, 2 h | Count tracked flights whose estimated arrival falls in the window | Live positions: distance left ÷ ground speed |
+| Next 24 h and beyond | Grafana Machine Learning forecast of landings per hour, per airport | History of detected landings; learns the daily and weekly schedule |
+
+**Panel: Expected arrivals at Tunisian airports** (bargauge)
+
+> Flights currently tracked toward each Tunisian airport, by estimated arrival time. Airports with no traffic are hidden.
+
+```promql
+# {{airport}} · 30 min
+max by (airport) (airport_expected_arrivals{within="30m"})
+# {{airport}} · 1 h
+max by (airport) (airport_expected_arrivals{within="1h"})
+# {{airport}} · 2 h
+max by (airport) (airport_expected_arrivals{within="2h"})
+```
+
+**Counting landings.** ADS-B has no "landed" message, so the quality checker detects it: a flight to a
+Tunisian airport counts as **landed** when it is below 4,000 ft within 25 km of the airport. Receiver
+coverage near the ground in Tunisia is thin, so a flight that **disappears within 80 km** of its
+destination also counts (`detection="lost_near_destination"`). Take-offs are counted the same way near
+the departure airport. These counts are the training data for the forecast.
+
+```yaml
+- record: airport:arrivals:count1h
+  expr: sum by (airport) (increase(airport_arrivals_total[1h]))
+- record: airport:departures:count1h
+  expr: sum by (airport) (increase(airport_departures_total[1h]))
+```
+
+**Panel: Landings and take-offs per hour** (timeseries)
+
+> Rolling 1-hour counts of detected landings and take-offs.
+
+```promql
+# landings (all Tunisian airports)
+sum(airport:arrivals:count1h)
+# take-offs (all Tunisian airports)
+sum(airport:departures:count1h)
+# landings · {{airport}}
+airport:arrivals:count1h > 0
+```
+
+```hcl
+resource "grafana_machine_learning_job" "airport_arrivals_forecast" {
+  name            = "Arrivals per Tunisian airport per hour"
+  metric          = "tunisia_airport_arrivals"
+  datasource_type = "prometheus"
+  datasource_uid  = var.prometheus_uid
+  query_params    = { expr = "sum by (airport) (increase(airport_arrivals_total[1h]))" }
+  interval        = 300
+  training_window = 2592000 # 30 days
+}
+```
+
+**Panel: Grafana ML forecast: landings per hour, per airport** (timeseries, data source `grafanacloud-ml-metrics`)
+
+> Grafana Cloud Machine Learning. One model per airport; the daily schedule needs 2+ days of history, the weekly one 2+ weeks.
+
+```promql
+# forecast · {{airport}}
+tunisia_airport_arrivals:predicted{ml_forecast="yhat"}
+# actual · {{airport}}
+tunisia_airport_arrivals:actual
+```
+
+## 5. Use case: forecast monitoring capacity
+
+Forecasting also protects the observability stack itself. Grafana Cloud bills by **active series**,
+and the free tier allows **10,000**. Every new flight creates new series (its position, altitude,
+speed…), so the count grows with traffic. Will we hit the limit next week? `predict_linear` projects the
+last 6 hours 7 days ahead, and an alert fires when the projection passes 90% of the limit.
+
+`count({__name__=~".+"})` over the pipeline's series matches Grafana Cloud's own billing metric
+(`grafanacloud_instance_active_series`: 387 vs. 388 when this was measured).
+
+```yaml
+- record: monitoring:active_series
+  expr: count({__name__=~".+"})
+- record: monitoring:active_series:predicted_7d
+  expr: predict_linear(monitoring:active_series[6h], 7 * 86400)
+- record: monitoring:active_series:days_to_limit
+  expr: |
+    (scalar(monitoring:active_series:limit) - monitoring:active_series)
+    / (deriv(monitoring:active_series[6h]) * 86400) > 0
+
+- alert: ActiveSeriesLimitWithin7Days
+  expr: monitoring:active_series:predicted_7d > 0.9 * scalar(monitoring:active_series:limit)
+  for: 1h
+  labels: { pillar: capacity, team: data-engineering, severity: warning }
+```
+
+**Panel: Active series: now, projected in 7 days, and the free-tier limit** (timeseries)
+
+```promql
+# active series
+monitoring:active_series
+# projected in 7 days
+monitoring:active_series:predicted_7d
+# free-tier limit
+monitoring:active_series:limit
+```
+
+**Panel: Days until the limit at the current growth rate** (stat)
+
+> 999 means the series count is not growing.
+
+```promql
+# days
+min(monitoring:active_series:days_to_limit) or vector(999)
+```
+
 ## Summary
 
-| Data arrives… | Detect drops with | Rule |
+| Question | Method | Rule / job |
 |---|---|---|
-| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |
-| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |
-| With a daily or weekly cycle | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |
+| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |
+| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |
+| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |
+| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |
+| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |
 
 Start with volume: it is the cheapest check and catches the most incidents. Then move from
-simple baselines to seasonal and ML forecasts as history accumulates.
+simple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the
+questions your users actually ask.

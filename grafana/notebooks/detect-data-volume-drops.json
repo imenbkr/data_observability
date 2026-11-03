@@ -28,7 +28,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning."
+              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.\n\nThen two forecasting use cases that answer real questions:\n\n4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.\n5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan."
             }
           }
         }
@@ -1438,13 +1438,643 @@
           }
         }
       },
+      "arrivals-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 4. Use case: forecast arrivals at Tunisian airports\n\nForecasting is most useful when it answers an operational question. Ground handling, border control,\ntaxis and people waiting at the airport all ask the same one: **how many planes will land at Tunis,\nEnfidha, Monastir or Djerba in the coming hours?** The pipeline answers it on two horizons:\n\n| Horizon | Method | Source |\n|---|---|---|\n| Next 30 min, 1 h, 2 h | Count tracked flights whose estimated arrival falls in the window | Live positions: distance left ÷ ground speed |\n| Next 24 h and beyond | Grafana Machine Learning forecast of landings per hour, per airport | History of detected landings; learns the daily and weekly schedule |"
+            }
+          }
+        }
+      },
+      "arrivals-expected": {
+        "kind": "Panel",
+        "spec": {
+          "id": 39,
+          "title": "Expected arrivals at Tunisian airports",
+          "description": "Flights currently tracked toward each Tunisian airport, by estimated arrival time. Airports with no traffic are hidden.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "max by (airport) (airport_expected_arrivals{within=\"30m\"})",
+                        "legendFormat": "{{airport}} · 30 min",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "max by (airport) (airport_expected_arrivals{within=\"1h\"})",
+                        "legendFormat": "{{airport}} · 1 h",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "max by (airport) (airport_expected_arrivals{within=\"2h\"})",
+                        "legendFormat": "{{airport}} · 2 h",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "valueMode": "color",
+                "namePlacement": "left"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0,
+                  "min": 0,
+                  "noValue": "None expected",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byValue",
+                      "options": {
+                        "reducer": "max",
+                        "op": "lte",
+                        "value": 0
+                      }
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.hideFrom",
+                        "value": {
+                          "viz": true,
+                          "legend": true,
+                          "tooltip": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "arrivals-detect": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "**Counting landings.** ADS-B has no \"landed\" message, so the quality checker detects it: a flight to a\nTunisian airport counts as **landed** when it is below 4,000 ft within 25 km of the airport. Receiver\ncoverage near the ground in Tunisia is thin, so a flight that **disappears within 80 km** of its\ndestination also counts (`detection=\"lost_near_destination\"`). Take-offs are counted the same way near\nthe departure airport. These counts are the training data for the forecast."
+            }
+          }
+        }
+      },
+      "arrivals-rules": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- record: airport:arrivals:count1h\n  expr: sum by (airport) (increase(airport_arrivals_total[1h]))\n- record: airport:departures:count1h\n  expr: sum by (airport) (increase(airport_departures_total[1h]))"
+            }
+          }
+        }
+      },
+      "arrivals-hourly": {
+        "kind": "Panel",
+        "spec": {
+          "id": 42,
+          "title": "Landings and take-offs per hour",
+          "description": "Rolling 1-hour counts of detected landings and take-offs.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "sum(airport:arrivals:count1h)",
+                        "legendFormat": "landings (all Tunisian airports)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "sum(airport:departures:count1h)",
+                        "legendFormat": "take-offs (all Tunisian airports)",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "airport:arrivals:count1h > 0",
+                        "legendFormat": "landings · {{airport}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "arrivals-ml-code": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "hcl",
+              "code": "resource \"grafana_machine_learning_job\" \"airport_arrivals_forecast\" {\n  name            = \"Arrivals per Tunisian airport per hour\"\n  metric          = \"tunisia_airport_arrivals\"\n  datasource_type = \"prometheus\"\n  datasource_uid  = var.prometheus_uid\n  query_params    = { expr = \"sum by (airport) (increase(airport_arrivals_total[1h]))\" }\n  interval        = 300\n  training_window = 2592000 # 30 days\n}"
+            }
+          }
+        }
+      },
+      "arrivals-ml": {
+        "kind": "Panel",
+        "spec": {
+          "id": 44,
+          "title": "Grafana ML forecast: landings per hour, per airport",
+          "description": "Grafana Cloud Machine Learning. One model per airport; the daily schedule needs 2+ days of history, the weekly one 2+ weeks.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_airport_arrivals:predicted{ml_forecast=\"yhat\"}",
+                        "legendFormat": "forecast · {{airport}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__ML_DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "tunisia_airport_arrivals:actual",
+                        "legendFormat": "actual · {{airport}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 1
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "options": "forecast.*"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "capacity-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 5. Use case: forecast monitoring capacity\n\nForecasting also protects the observability stack itself. Grafana Cloud bills by **active series**,\nand the free tier allows **10,000**. Every new flight creates new series (its position, altitude,\nspeed…), so the count grows with traffic. Will we hit the limit next week? `predict_linear` projects the\nlast 6 hours 7 days ahead, and an alert fires when the projection passes 90% of the limit.\n\n`count({__name__=~\".+\"})` over the pipeline's series matches Grafana Cloud's own billing metric\n(`grafanacloud_instance_active_series`: 387 vs. 388 when this was measured)."
+            }
+          }
+        }
+      },
+      "capacity-rules": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- record: monitoring:active_series\n  expr: count({__name__=~\".+\"})\n- record: monitoring:active_series:predicted_7d\n  expr: predict_linear(monitoring:active_series[6h], 7 * 86400)\n- record: monitoring:active_series:days_to_limit\n  expr: |\n    (scalar(monitoring:active_series:limit) - monitoring:active_series)\n    / (deriv(monitoring:active_series[6h]) * 86400) > 0\n\n- alert: ActiveSeriesLimitWithin7Days\n  expr: monitoring:active_series:predicted_7d > 0.9 * scalar(monitoring:active_series:limit)\n  for: 1h\n  labels: { pillar: capacity, team: data-engineering, severity: warning }"
+            }
+          }
+        }
+      },
+      "capacity-panel": {
+        "kind": "Panel",
+        "spec": {
+          "id": 47,
+          "title": "Active series: now, projected in 7 days, and the free-tier limit",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "monitoring:active_series",
+                        "legendFormat": "active series",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "monitoring:active_series:predicted_7d",
+                        "legendFormat": "projected in 7 days",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "monitoring:active_series:limit",
+                        "legendFormat": "free-tier limit",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 0,
+                  "min": 0
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "projected in 7 days"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.lineStyle",
+                        "value": {
+                          "fill": "dash",
+                          "dash": [
+                            10,
+                            10
+                          ]
+                        }
+                      },
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "orange"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "free-tier limit"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      },
+                      {
+                        "id": "custom.lineWidth",
+                        "value": 2
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "capacity-days": {
+        "kind": "Panel",
+        "spec": {
+          "id": 48,
+          "title": "Days until the limit at the current growth rate",
+          "description": "999 means the series count is not growing.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "min(monitoring:active_series:days_to_limit) or vector(999)",
+                        "legendFormat": "days",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "colorMode": "background",
+                "graphMode": "none"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "d",
+                  "decimals": 0,
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "999": {
+                          "text": "Not growing",
+                          "index": 0
+                        }
+                      }
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 7
+                      },
+                      {
+                        "color": "green",
+                        "value": 30
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "summary": {
         "kind": "Cell",
         "spec": {
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "## Summary\n\n| Data arrives… | Detect drops with | Rule |\n|---|---|---|\n| Continuously (stream) | Comparison with the same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| In batches (hourly) | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| With a daily or weekly cycle | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates."
+              "text": "## Summary\n\n| Question | Method | Rule / job |\n|---|---|---|\n| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |\n| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the\nquestions your users actually ask."
             }
           }
         }
@@ -1821,6 +2451,116 @@
               "element": {
                 "kind": "ElementReference",
                 "name": "ml-alert-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-expected"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-detect"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-rules"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-hourly"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-ml-code"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "arrivals-ml"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "capacity-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "capacity-rules"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "capacity-panel"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "capacity-days"
               }
             }
           },

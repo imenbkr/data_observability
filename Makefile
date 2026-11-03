@@ -1,4 +1,4 @@
-.PHONY: up down clean ps logs flights topic routes notebook screenshots help
+.PHONY: up down clean ps logs flights topic routes notebook help
 
 up:       ## Build and start the stack
 	docker compose up -d --build
@@ -31,6 +31,3 @@ help:     ## List targets
 notebook: ## Build the "Detect data volume drops" notebook (+ its dashboard version) and deploy it locally
 	python3 scripts/build_notebook.py && python3 scripts/build_forecast_dashboard.py \
 	  && python3 scripts/export_notebook_markdown.py && python3 scripts/deploy_notebook.py
-
-screenshots: ## Refresh the notebook screenshots from the running stack, then redeploy the notebook
-	python3 scripts/take_screenshots.py && $(MAKE) notebook
