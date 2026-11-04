@@ -23,6 +23,7 @@ flowchart LR
 |---|---|
 | `producer` | Every 60 s, queries 10 areas (Tunisia, Libya & Malta, Algeria, Mediterranean, France, Benelux, UK, Germany, Poland). Keeps aircraft whose flight number is a known Tunisia route, plus every Tunisair / Nouvelair / Tunisair Express plane. Adds airline, direction and route (e.g. `Paris → Tunis`), then publishes one message per aircraft |
 | `kafka` | Single-node Kafka 3.9 (KRaft) with the topic `tunisia.flights` |
+| `schedules` | Twice a day, fetches scheduled arrivals at Tunis, Enfidha and Monastir from AeroDataBox (free RapidAPI plan, `RAPIDAPI_KEY` in `.env`, optional) and publishes them to `tunisia.schedules` |
 | `consumer` | Validates every message and exposes the data-quality metrics and live flight positions |
 | `prometheus` | Stores metrics; recording and alerting rules are in [`prometheus/`](prometheus/) |
 | `grafana` | Provisioned **Tunisia Flights · Data Observability** dashboard with Notebooks enabled |
@@ -152,6 +153,7 @@ Every alert has `pillar` and `team=data-engineering` labels, ready for notificat
 |---|---|---|
 | **How many planes land at each Tunisian airport in the next hours?** | `airport_expected_arrivals{airport, within="30m\|1h\|2h"}` from each flight's estimated arrival | Deterministic: distance left ÷ current speed |
 | **…and tomorrow?** | `airport_arrivals_total` (detected landings), `tunisia_airport_arrivals:predicted` | Grafana Cloud ML forecast per airport (`grafana_machine_learning_job` in Terraform) |
+| **Are flights landing on time?** | `airport_arrival_delay_minutes` = detected landing − scheduled arrival from [AeroDataBox](https://aerodatabox.com) (free plan, `schedules` service) | On-time rate, delay per airport/airline, alert `ArrivalDelaysHigh`; completeness check `LandingDetectionIncomplete` |
 | **Will monitoring outgrow the Grafana Cloud free tier (10k active series)?** | `monitoring:active_series` (matches `grafanacloud_instance_active_series`) | `predict_linear` 7 days ahead, alert `ActiveSeriesLimitWithin7Days` |
 
 Landings and take-offs are detected from positions: below 4,000 ft within 25 km of the destination

@@ -15,6 +15,13 @@ prometheus.scrape "consumer" {
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
 }
 
+prometheus.scrape "schedules" {
+  job_name        = "schedules"
+  targets         = [{"__address__" = "schedules:8002"}]
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
 prometheus.remote_write "grafana_cloud" {
   endpoint {
     url = sys.env("GRAFANA_CLOUD_PROM_URL")

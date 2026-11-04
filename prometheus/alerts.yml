@@ -82,3 +82,22 @@ groups:
         labels: { pillar: capacity, team: data-engineering, severity: warning }
         annotations:
           summary: "At the current growth rate, active series reach {{ $value | humanize }} within 7 days (limit 10,000)"
+
+  - name: delay-alerts
+    rules:
+      - alert: ArrivalDelaysHigh
+        expr: |
+          airport:arrival_delay:avg3h > 45
+          and sum by (airport) (increase(airport_arrival_delay_minutes_count[3h])) >= 5
+        for: 30m
+        labels: { pillar: delays, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Arrivals at {{ $labels.airport }} are {{ $value | humanize }} min late on average (last 3 h)"
+      - alert: LandingDetectionIncomplete
+        expr: |
+          airport:schedule_match:ratio24h < 0.5
+          and sum by (airport) (increase(airport_schedule_matches_total{result=~"matched|missed"}[24h])) >= 10
+        for: 1h
+        labels: { pillar: lineage, team: data-engineering, severity: warning }
+        annotations:
+          summary: "Only {{ $value | humanizePercentage }} of scheduled arrivals at {{ $labels.airport }} were detected landing"

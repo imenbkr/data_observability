@@ -28,7 +28,7 @@
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.\n\nThen two forecasting use cases that answer real questions:\n\n4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.\n5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan."
+              "text": "# Detect data volume drops\n\nA drop in data volume leaves gaps in the information that decisions are based on, and it rarely\nthrows an error. This notebook shows how to catch volume drops with Grafana, Prometheus and\nGrafana Machine Learning on a live pipeline that tracks every flight to and from Tunisia:\n\n> adsb.lol (live ADS-B) → producer → Kafka `tunisia.flights` → quality checker → Prometheus → Grafana\n\nHow you detect a drop depends on **how often data arrives**:\n\n1. **High ingestion frequency:** a continuous stream, compared with a baseline.\n2. **Low ingestion frequency:** batches, compared with a one-step-ahead forecast.\n3. **Better forecasts:** seasonal baselines, PromQL trend functions and Grafana Machine Learning.\n\nThen two forecasting use cases that answer real questions:\n\n4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.\n5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan.\n6. **Arrival delays:** official schedules joined with the landings the pipeline detects."
             }
           }
         }
@@ -2068,13 +2068,237 @@
           }
         }
       },
+      "delays-title": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Markdown",
+            "spec": {
+              "text": "## 6. Use case: arrival delays\n\nADS-B tells us **when** a plane lands, but not when it **should** have landed. Free schedule data\ncomes from **AeroDataBox** (free plan, 400 units a month): one call returns 12 hours of scheduled\narrivals for an airport, every airline. For Tunisian airports it only has scheduled times, so the\npipeline joins them with its own landing detection:\n\n> **delay = landing detected from ADS-B − scheduled arrival (AeroDataBox)**\n\n| Step | Where |\n|---|---|\n| Fetch scheduled arrivals for Tunis, Enfidha and Monastir twice a day (360 of 400 units a month) | `schedules` service → Kafka `tunisia.schedules` |\n| Match a landing to its schedule: AeroDataBox `TU 719` + airline ICAO `TAR` = ADS-B callsign `TAR719` | quality checker |\n| Delay histogram per airport and airline; on time = less than 15 minutes late | `airport_arrival_delay_minutes` |\n| Scheduled arrivals never detected landing = **completeness** of our own tracking | `airport_schedule_matches_total{result=\"missed\"}` |\n\nAccuracy is about ±5–10 minutes (positions every minute, landing detected near the ground)."
+            }
+          }
+        }
+      },
+      "delays-rules": {
+        "kind": "Cell",
+        "spec": {
+          "content": {
+            "kind": "Code",
+            "spec": {
+              "language": "yaml",
+              "code": "- record: airport:arrival_on_time:ratio24h\n  expr: |\n    sum by (airport) (increase(airport_arrival_delay_minutes_bucket{le=\"15.0\"}[24h]))\n    / sum by (airport) (increase(airport_arrival_delay_minutes_count[24h]))\n\n- alert: ArrivalDelaysHigh\n  expr: |\n    airport:arrival_delay:avg3h > 45\n    and sum by (airport) (increase(airport_arrival_delay_minutes_count[3h])) >= 5\n  for: 30m"
+            }
+          }
+        }
+      },
+      "delays-avg": {
+        "kind": "Panel",
+        "spec": {
+          "id": 51,
+          "title": "Average arrival delay per airport (rolling 3 h)",
+          "description": "Minutes late on average over the last 3 hours. Starts with the first matched landings.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "airport:arrival_delay:avg3h",
+                        "legendFormat": "{{airport}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "",
+            "spec": {
+              "options": {},
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "m",
+                  "decimals": 0
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "delays-airline": {
+        "kind": "Panel",
+        "spec": {
+          "id": 52,
+          "title": "On-time rate by airline (24 h)",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "sort(airline:arrival_on_time:ratio24h)",
+                        "legendFormat": "{{airline}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "min": 0,
+                  "max": 1,
+                  "noValue": "No landings yet",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.6
+                      },
+                      {
+                        "color": "green",
+                        "value": 0.8
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "delays-completeness": {
+        "kind": "Panel",
+        "spec": {
+          "id": 53,
+          "title": "Scheduled arrivals detected by the pipeline (24 h)",
+          "description": "Low values mean receiver coverage gaps, or callsigns that differ from the flight number.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "__DATASOURCE_UID__"
+                      },
+                      "spec": {
+                        "expr": "airport:schedule_match:ratio24h",
+                        "legendFormat": "{{airport}}",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "bargauge",
+            "version": "",
+            "spec": {
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "min": 0,
+                  "max": 1,
+                  "noValue": "No data yet"
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "summary": {
         "kind": "Cell",
         "spec": {
           "content": {
             "kind": "Markdown",
             "spec": {
-              "text": "## Summary\n\n| Question | Method | Rule / job |\n|---|---|---|\n| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |\n| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the\nquestions your users actually ask."
+              "text": "## Summary\n\n| Question | Method | Rule / job |\n|---|---|---|\n| Is the stream arriving as usual? | Same time yesterday, plus a missing-data check | `SourceVolumeBelowBaseline`, `SourceDataMissing` |\n| Is this hour's batch complete? | One-step-ahead forecast with a 90% prediction band | `FlightVolumeBelowForecast` |\n| Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |\n| How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |\n| Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |\n| Are flights landing on time? | Detected landing − scheduled arrival (AeroDataBox) | `ArrivalDelaysHigh`, `LandingDetectionIncomplete` |\n\nStart with volume: it is the cheapest check and catches the most incidents. Then move from\nsimple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the\nquestions your users actually ask."
             }
           }
         }
@@ -2561,6 +2785,56 @@
               "element": {
                 "kind": "ElementReference",
                 "name": "capacity-days"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "delays-title"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "delays-rules"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "delays-avg"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "delays-airline"
+              }
+            }
+          },
+          {
+            "kind": "NotebookLayoutItem",
+            "spec": {
+              "source": "user",
+              "element": {
+                "kind": "ElementReference",
+                "name": "delays-completeness"
               }
             }
           },

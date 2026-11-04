@@ -116,3 +116,36 @@ groups:
         expr: |
           (scalar(monitoring:active_series:limit) - monitoring:active_series)
           / (deriv(monitoring:active_series[6h]) * 86400) > 0
+
+  # Use case: arrival delays = detected landing (ADS-B) - scheduled arrival (AeroDataBox)
+  - name: arrival-delays
+    interval: 5m
+    rules:
+      - record: airport:arrival_delay:avg3h
+        expr: |
+          sum by (airport) (increase(airport_arrival_delay_minutes_sum[3h]))
+          / sum by (airport) (increase(airport_arrival_delay_minutes_count[3h]))
+      - record: airport:arrival_delay:avg24h
+        expr: |
+          sum by (airport) (increase(airport_arrival_delay_minutes_sum[24h]))
+          / sum by (airport) (increase(airport_arrival_delay_minutes_count[24h]))
+      - record: airport:arrival_delay:p90_24h
+        expr: histogram_quantile(0.9, sum by (le, airport) (increase(airport_arrival_delay_minutes_bucket[24h])))
+      # on time = landed less than 15 minutes after the scheduled time
+      - record: airport:arrival_on_time:ratio24h
+        expr: |
+          sum by (airport) (increase(airport_arrival_delay_minutes_bucket{le="15.0"}[24h]))
+          / sum by (airport) (increase(airport_arrival_delay_minutes_count[24h]))
+      - record: airline:arrival_delay:avg24h
+        expr: |
+          sum by (airline) (increase(airport_arrival_delay_minutes_sum[24h]))
+          / sum by (airline) (increase(airport_arrival_delay_minutes_count[24h]))
+      - record: airline:arrival_on_time:ratio24h
+        expr: |
+          sum by (airline) (increase(airport_arrival_delay_minutes_bucket{le="15.0"}[24h]))
+          / sum by (airline) (increase(airport_arrival_delay_minutes_count[24h]))
+      # Completeness: share of scheduled arrivals whose landing the pipeline detected
+      - record: airport:schedule_match:ratio24h
+        expr: |
+          sum by (airport) (increase(airport_schedule_matches_total{result="matched"}[24h]))
+          / sum by (airport) (increase(airport_schedule_matches_total{result=~"matched|missed"}[24h]))

@@ -1,6 +1,9 @@
 """Consumes positions of flights to and from Tunisia from Kafka, checks their quality and exposes metrics
 for the five pillars of data observability (volume, freshness, schema, distribution, lineage),
 plus the live position of every flight for the Grafana map.
+
+It also reads scheduled arrivals (topic tunisia.schedules, from AeroDataBox) and joins them with the
+landings it detects: delay = detected landing time - scheduled time.
 """
 import json
 import math
@@ -12,6 +15,9 @@ from prometheus_client import Counter, Gauge, Histogram, start_http_server
 
 KAFKA = os.getenv("KAFKA", "kafka:9092")
 TOPIC = os.getenv("TOPIC", "tunisia.flights")
+SCHEDULES_TOPIC = os.getenv("SCHEDULES_TOPIC", "tunisia.schedules")
+MATCH_WINDOW = 6 * 3600   # a landing matches a scheduled arrival at most this far apart
+MISSED_AFTER = 90 * 60    # a scheduled arrival with no detected landing this long after is "missed"
 ACTIVE_WINDOW = int(os.getenv("ACTIVE_WINDOW_SECONDS", "600"))
 
 REQUIRED = ["hex", "callsign", "lat", "lon", "altitude_ft", "position_ts", "fetched_at"]
@@ -83,6 +89,16 @@ for _a in TUNISIAN_AIRPORTS.values():
         expected_arrivals.labels(_a, _w)
 counted = {}  # (hex, callsign, event) -> time, so each landing / take-off counts once
 
+# Delays: scheduled arrivals (AeroDataBox) joined with detected landings (ADS-B)
+arrival_delay = Histogram("airport_arrival_delay_minutes", "Detected landing time minus scheduled arrival time",
+                          ["airport", "airline"], buckets=[-30, -15, 0, 15, 30, 60, 120, 240])
+scheduled_arrivals = Counter("airport_scheduled_arrivals_total", "Scheduled arrivals received", ["airport"])
+schedule_matches = Counter("airport_schedule_matches_total",
+                           "Scheduled arrivals vs. detected landings: matched, missed, or landing without schedule",
+                           ["airport", "result"])
+schedules = {}  # callsign -> list of {"airport", "scheduled", "matched", "missed"}
+schedule_airports = {}  # airport code -> last time a schedule for it was received
+
 # Live flights (map + table): one gauge per attribute, all with the same flight labels
 FLIGHT_GAUGES = {name: Gauge(f"flight_{name}", doc, FLIGHT_LABELS) for name, doc in [
     ("latitude", "Last latitude"),
@@ -93,6 +109,8 @@ FLIGHT_GAUGES = {name: Gauge(f"flight_{name}", doc, FLIGHT_LABELS) for name, doc
     ("phase", "0 on ground, 1 climbing, 2 cruising, 3 descending"),
     ("distance_left_km", "Straight-line distance to the destination airport"),
     ("eta_timestamp_ms", "Estimated arrival (distance left / current speed)"),
+    ("scheduled_arrival_timestamp_ms", "Scheduled arrival at a Tunisian airport (AeroDataBox)"),
+    ("delay_minutes", "Estimated arrival minus scheduled arrival, in minutes"),
     ("tracked_since_timestamp_ms", "When this flight was first seen"),
     ("last_update_timestamp_ms", "Time of the last received position"),
 ]}
@@ -124,17 +142,57 @@ def phase(rec):
 
 
 def count_once(rec, event, counter):
+    """Increment counter once per (aircraft, callsign, event); return True the first time."""
     key = (rec["hex"], rec["callsign"], event)
-    if key not in counted:
-        counted[key] = time.time()
-        counter.inc()
+    if key in counted:
+        return False
+    counted[key] = time.time()
+    counter.inc()
+    return True
+
+
+def find_schedule(callsign, airport_code, ts):
+    """The scheduled arrival of this callsign at this airport closest to ts, if any."""
+    candidates = [e for e in schedules.get(callsign, [])
+                  if e["airport"] == airport_code and abs(ts - e["scheduled"]) < MATCH_WINDOW]
+    return min(candidates, key=lambda e: abs(ts - e["scheduled"]), default=None)
+
+
+def record_landing(callsign, airport_code, airline, landed_ts):
+    """Join a detected landing with its schedule and record the delay."""
+    airport = TUNISIAN_AIRPORTS[airport_code]
+    entry = find_schedule(callsign, airport_code, landed_ts)
+    if entry and not entry["matched"]:
+        entry["matched"] = True
+        schedule_matches.labels(airport, "matched").inc()
+        arrival_delay.labels(airport, airline).observe((landed_ts - entry["scheduled"]) / 60)
+    elif not entry and airport_code in schedule_airports:
+        schedule_matches.labels(airport, "landed_without_schedule").inc()
+
+
+def handle_schedule(msg):
+    try:
+        s = json.loads(msg.value())
+        code, callsign, scheduled = s["airport"], s["callsign"], float(s["scheduled_ts"])
+    except (ValueError, KeyError, TypeError):
+        invalid.labels("invalid_json").inc()
+        return
+    if code not in TUNISIAN_AIRPORTS:
+        return
+    entries = schedules.setdefault(callsign, [])
+    if any(e["airport"] == code and e["scheduled"] == scheduled for e in entries):
+        return  # already known (overlapping fetch windows)
+    entries.append({"airport": code, "scheduled": scheduled, "matched": False, "missed": False})
+    schedule_airports[code] = time.time()
+    scheduled_arrivals.labels(TUNISIAN_AIRPORTS[code]).inc()
 
 
 def detect_airport_events(rec, alt, left):
     """Count landings at and take-offs from Tunisian airports."""
     dest = TUNISIAN_AIRPORTS.get(rec.get("destination") or "")
     if dest and left is not None and left < LANDED_KM and alt < LANDED_FT:
-        count_once(rec, "arrival", arrivals.labels(dest, "landed"))
+        if count_once(rec, "arrival", arrivals.labels(dest, "landed")):
+            record_landing(rec["callsign"], rec["destination"], rec.get("airline") or "Unknown", rec["position_ts"])
     origin = TUNISIAN_AIRPORTS.get(rec.get("origin") or "")
     if origin and rec.get("origin_lat") is not None and alt < DEPARTED_FT and \
             distance_km(rec["lat"], rec["lon"], rec["origin_lat"], rec["origin_lon"]) < DEPARTED_KM and \
@@ -203,6 +261,13 @@ def record(rec, kafka_ts):
         values["distance_left_km"] = left
         if speed_kmh > 100:
             values["eta_timestamp_ms"] = (rec["position_ts"] + left / speed_kmh * 3600) * 1000
+    if rec.get("destination") in TUNISIAN_AIRPORTS:
+        entry = find_schedule(rec["callsign"], rec["destination"],
+                              values.get("eta_timestamp_ms", rec["position_ts"] * 1000) / 1000)
+        if entry:
+            values["scheduled_arrival_timestamp_ms"] = entry["scheduled"] * 1000
+            if "eta_timestamp_ms" in values:
+                values["delay_minutes"] = (values["eta_timestamp_ms"] / 1000 - entry["scheduled"]) / 60
     for name, gauge in FLIGHT_GAUGES.items():
         if name in values:
             gauge.labels(*labels).set(values[name])
@@ -218,6 +283,7 @@ def record(rec, kafka_ts):
         "shape": frozenset(rec),
         "callsign": rec["callsign"], "hex": rec["hex"], "destination": rec.get("destination"),
         "eta": values.get("eta_timestamp_ms", 0) / 1000 or None, "left": left,
+        "position_ts": rec["position_ts"],
     }
 
 
@@ -236,12 +302,22 @@ def refresh_window():
             # lost from coverage close to a Tunisian destination: it has landed
             dest = TUNISIAN_AIRPORTS.get(f["destination"] or "")
             if dest and f["left"] is not None and f["left"] < LOST_NEAR_DESTINATION_KM:
-                count_once(f, "arrival", arrivals.labels(dest, "lost_near_destination"))
+                if count_once(f, "arrival", arrivals.labels(dest, "lost_near_destination")):
+                    record_landing(f["callsign"], f["destination"], f["airline"], f["position_ts"])
             remove_flight(f)
             del flights[hex_]
     for key, t in list(counted.items()):
         if now - t > 6 * 3600:
             del counted[key]
+    # scheduled arrivals that never showed up as a detected landing
+    for callsign, entries in list(schedules.items()):
+        for e in entries:
+            if not e["matched"] and not e["missed"] and now - e["scheduled"] > MISSED_AFTER:
+                e["missed"] = True
+                schedule_matches.labels(TUNISIAN_AIRPORTS[e["airport"]], "missed").inc()
+        schedules[callsign] = [e for e in entries if now - e["scheduled"] < 24 * 3600]
+        if not schedules[callsign]:
+            del schedules[callsign]
     live = list(flights.values())
     active.set(len(live))
     for airport in TUNISIAN_AIRPORTS.values():
@@ -269,13 +345,17 @@ def refresh_window():
 def main():
     start_http_server(8000)
     consumer = Consumer({"bootstrap.servers": KAFKA, "group.id": "flight-quality",
-                         "auto.offset.reset": "earliest"})
-    consumer.subscribe([TOPIC])
-    print(f"consuming {TOPIC}", flush=True)
+                         "auto.offset.reset": "earliest",
+                         # pick up tunisia.schedules quickly when it is created after startup
+                         "topic.metadata.refresh.interval.ms": 30000})
+    consumer.subscribe([TOPIC, SCHEDULES_TOPIC])
+    print(f"consuming {TOPIC} and {SCHEDULES_TOPIC}", flush=True)
     next_refresh = 0.0
     while True:
         msg = consumer.poll(1.0)
-        if msg is not None and not msg.error():
+        if msg is not None and not msg.error() and msg.topic() == SCHEDULES_TOPIC:
+            handle_schedule(msg)
+        elif msg is not None and not msg.error():
             messages.inc()
             last_message.set(time.time())
             rec, reason = check(msg)

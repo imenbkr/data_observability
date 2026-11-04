@@ -11,3 +11,5 @@ scrape_configs:
     static_configs: [{ targets: ["producer:8001"] }]
   - job_name: consumer
     static_configs: [{ targets: ["consumer:8000"] }]
+  - job_name: schedules
+    static_configs: [{ targets: ["schedules:8002"] }]

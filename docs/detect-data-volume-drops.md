@@ -18,6 +18,7 @@ Then two forecasting use cases that answer real questions:
 
 4. **Arrivals at Tunisian airports:** how many planes land in the next hours, and tomorrow.
 5. **Monitoring capacity:** when the stack will outgrow its Grafana Cloud plan.
+6. **Arrival delays:** official schedules joined with the landings the pipeline detects.
 
 ### The data
 
@@ -439,6 +440,62 @@ monitoring:active_series:limit
 min(monitoring:active_series:days_to_limit) or vector(999)
 ```
 
+## 6. Use case: arrival delays
+
+ADS-B tells us **when** a plane lands, but not when it **should** have landed. Free schedule data
+comes from **AeroDataBox** (free plan, 400 units a month): one call returns 12 hours of scheduled
+arrivals for an airport, every airline. For Tunisian airports it only has scheduled times, so the
+pipeline joins them with its own landing detection:
+
+> **delay = landing detected from ADS-B − scheduled arrival (AeroDataBox)**
+
+| Step | Where |
+|---|---|
+| Fetch scheduled arrivals for Tunis, Enfidha and Monastir twice a day (360 of 400 units a month) | `schedules` service → Kafka `tunisia.schedules` |
+| Match a landing to its schedule: AeroDataBox `TU 719` + airline ICAO `TAR` = ADS-B callsign `TAR719` | quality checker |
+| Delay histogram per airport and airline; on time = less than 15 minutes late | `airport_arrival_delay_minutes` |
+| Scheduled arrivals never detected landing = **completeness** of our own tracking | `airport_schedule_matches_total{result="missed"}` |
+
+Accuracy is about ±5–10 minutes (positions every minute, landing detected near the ground).
+
+```yaml
+- record: airport:arrival_on_time:ratio24h
+  expr: |
+    sum by (airport) (increase(airport_arrival_delay_minutes_bucket{le="15.0"}[24h]))
+    / sum by (airport) (increase(airport_arrival_delay_minutes_count[24h]))
+
+- alert: ArrivalDelaysHigh
+  expr: |
+    airport:arrival_delay:avg3h > 45
+    and sum by (airport) (increase(airport_arrival_delay_minutes_count[3h])) >= 5
+  for: 30m
+```
+
+**Panel: Average arrival delay per airport (rolling 3 h)** (timeseries)
+
+> Minutes late on average over the last 3 hours. Starts with the first matched landings.
+
+```promql
+# {{airport}}
+airport:arrival_delay:avg3h
+```
+
+**Panel: On-time rate by airline (24 h)** (bargauge)
+
+```promql
+# {{airline}}
+sort(airline:arrival_on_time:ratio24h)
+```
+
+**Panel: Scheduled arrivals detected by the pipeline (24 h)** (bargauge)
+
+> Low values mean receiver coverage gaps, or callsigns that differ from the flight number.
+
+```promql
+# {{airport}}
+airport:schedule_match:ratio24h
+```
+
 ## Summary
 
 | Question | Method | Rule / job |
@@ -448,6 +505,7 @@ min(monitoring:active_series:days_to_limit) or vector(999)
 | Normal for this hour of the day? | Seasonal baseline, or a Grafana Machine Learning forecast | `flights:positions:seasonal_*`, ML alert |
 | How many planes land at each airport soon? | Estimated arrivals (next 2 h), ML forecast (next days) | `airport_expected_arrivals`, `tunisia_airport_arrivals` |
 | Will monitoring outgrow its plan? | `predict_linear` on active series | `ActiveSeriesLimitWithin7Days` |
+| Are flights landing on time? | Detected landing − scheduled arrival (AeroDataBox) | `ArrivalDelaysHigh`, `LandingDetectionIncomplete` |
 
 Start with volume: it is the cheapest check and catches the most incidents. Then move from
 simple baselines to seasonal and ML forecasts as history accumulates, and point forecasts at the

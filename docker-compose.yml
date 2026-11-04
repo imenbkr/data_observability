@@ -44,6 +44,16 @@ services:
       USER_AGENT: ${USER_AGENT:-tunisia-flights-data-observability-demo}
     volumes: [./data:/app/data:ro]
 
+  # Scheduled arrivals at Tunisian airports (AeroDataBox free plan), joined with landings for delays
+  schedules:
+    build: ./schedules
+    restart: unless-stopped
+    depends_on: { kafka: { condition: service_healthy } }
+    environment:
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      SCHEDULE_AIRPORTS: ${SCHEDULE_AIRPORTS:-DTTA,DTNH,DTMB}
+    volumes: [schedules-data:/data]
+
   # Checks data quality and exposes the five-pillar metrics
   consumer:
     build: ./consumer
@@ -96,6 +106,7 @@ services:
 
 volumes:
   kafka-data:
+  schedules-data:
   alloy-data:
   prometheus-data:
   grafana-data:

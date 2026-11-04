@@ -72,10 +72,11 @@ ATTRIBUTES = [  # (metric suffix, column name)
     ("phase", "Status"), ("altitude_feet", "Altitude"), ("speed_kmh", "Speed"),
     ("distance_left_km", "Distance left"), ("eta_timestamp_ms", "Arrival (est.)"),
     ("tracked_since_timestamp_ms", "Tracked since"), ("last_update_timestamp_ms", "Last update"),
+    ("scheduled_arrival_timestamp_ms", "Scheduled"), ("delay_minutes", "Delay"),
 ]
 FLIGHT_QUERIES = [q(f"max by ({FLIGHT_BY}) (flight_{m}{FILTER})", instant=True, fmt="table") for m, _ in ATTRIBUTES]
 COLUMNS = ["Flight", "Airline", "Direction", "From", "To", "Status", "Aircraft", "Altitude", "Speed",
-           "Distance left", "Arrival (est.)", "Tracked since", "Last update", "Registration"]
+           "Distance left", "Scheduled", "Arrival (est.)", "Delay", "Tracked since", "Last update", "Registration"]
 rename = {f"Value #{chr(65 + i)}": col for i, (_, col) in enumerate(ATTRIBUTES)}
 rename.update({"flight": "Flight", "airline": "Airline", "direction": "Direction", "origin": "From", "destination": "To", "aircraft": "Aircraft",
                "registration": "Registration"})
@@ -87,6 +88,7 @@ FLIGHT_TRANSFORMS = [
         "indexByName": {**{k: COLUMNS.index(v) for k, v in rename.items() if v in COLUMNS}},
     }},
 ]
+DELAY_COLORS = steps((None, "green"), (15, "orange"), (60, "red"))  # minutes late
 ALTITUDE_COLORS = steps((None, "#8AB8FF"), (10000, "#5794F2"), (25000, "#1F60C4"), (33000, "#FF9830"))
 PHASES = {"0": ("On ground", "text"), "1": ("Climbing ↑", "green"), "2": ("Cruising", "blue"), "3": ("Descending ↓", "orange")}
 DIRECTIONS = {"Arrival": ("Arrival ↘", "green"), "Departure": ("Departure ↗", "blue"),
@@ -104,6 +106,9 @@ FLIGHT_OVERRIDES = [
     by_name("Distance left", ("unit", "suffix: km"), ("decimals", 0)),
     by_name("Arrival (est.)", ("unit", "time:HH:mm")),
     by_name("Tracked since", ("unit", "time:HH:mm")),
+    by_name("Scheduled", ("unit", "time:HH:mm")),
+    by_name("Delay", ("unit", "m"), ("decimals", 0), ("thresholds", DELAY_COLORS),
+            ("custom.cellOptions", {"type": "color-text"})),
     by_name("Last update", ("unit", "dateTimeFromNow")),
     by_name("latitude", ("custom.hidden", True)),
     by_name("longitude", ("custom.hidden", True)),
@@ -111,7 +116,8 @@ FLIGHT_OVERRIDES = [
     by_name("Registration", ("custom.hidden", True)),
 ] + [by_name(col, ("custom.width", w)) for col, w in [
     ("Flight", 80), ("Airline", 130), ("Direction", 105), ("Status", 110), ("Aircraft", 135), ("Altitude", 95), ("Speed", 95),
-    ("Distance left", 105), ("Arrival (est.)", 110), ("Tracked since", 110), ("Last update", 120)]]
+    ("Distance left", 105), ("Scheduled", 90), ("Arrival (est.)", 110), ("Delay", 80), ("Tracked since", 110),
+    ("Last update", 120)]]
 
 text("How to read this dashboard", """
 **What you see:** every plane flying **to, from or within Tunisia** right now (Tunisair, Nouvelair, Transavia,
@@ -157,7 +163,8 @@ panel("geomap", "Map", FLIGHT_QUERIES, 0, 24, 13,
           "tooltip": {"mode": "details"},
       })
 y += 13
-panel("table", "Flights", FLIGHT_QUERIES, 0, 24, 13, transformations=FLIGHT_TRANSFORMS, overrides=FLIGHT_OVERRIDES,
+panel("table", "Flights", FLIGHT_QUERIES, 0, 24, 13, transformations=FLIGHT_TRANSFORMS,
+      overrides=FLIGHT_OVERRIDES + [by_name(c, ("custom.hidden", True)) for c in ("Scheduled", "Tracked since")],
       desc="One row per flight. 'Tracked since' is when our pipeline first saw it (not the scheduled departure).",
       options={"showHeader": True, "sortBy": [{"displayName": "Arrival (est.)"}], "cellHeight": "sm"})
 y += 13
@@ -183,6 +190,40 @@ panel("table", "Next arrivals", ARRIVAL_QUERIES, 12, 12, 9, transformations=FLIG
       desc="Flights to Tunisian airports, soonest first. Estimated arrival = distance left ÷ current speed.",
       options={"showHeader": True, "sortBy": [{"displayName": "Arrival (est.)"}], "cellHeight": "sm"})
 y += 9
+
+row("Delays at Tunisian airports")
+text("How delays are measured", """
+**Delay = detected landing time − scheduled arrival time.** Scheduled times come from
+**AeroDataBox** (free plan, Tunis-Carthage, Enfidha and Monastir). Landing times come from this
+pipeline's own ADS-B tracking: a flight counts as landed below 4,000 ft within 25 km of the airport,
+or when it disappears within 80 km of it. Accuracy is about ±5–10 minutes. **On time** = less than
+15 minutes late. Flights in the air show an expected delay (estimated arrival − scheduled).
+""", 0, 24, 4)
+y += 4
+panel("bargauge", "On-time arrivals (24 h)", [q("airport:arrival_on_time:ratio24h", "{{airport}}", instant=True)],
+      0, 6, 8, "percentunit", options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+                                       "reduceOptions": {"calcs": ["lastNotNull"]}},
+      defaults={"min": 0, "max": 1, "noValue": "No landings yet"}, thresholds=steps((None, "red"), (0.6, "orange"), (0.8, "green")))
+panel("bargauge", "Average delay (24 h)", [q("airport:arrival_delay:avg24h", "{{airport}}", instant=True)],
+      6, 6, 8, "m", options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+                             "reduceOptions": {"calcs": ["lastNotNull"]}},
+      defaults={"decimals": 0, "noValue": "No landings yet"}, thresholds=DELAY_COLORS)
+panel("bargauge", "Average delay by airline (24 h, worst 10)", [q("topk(10, airline:arrival_delay:avg24h)", "{{airline}}", instant=True)],
+      12, 12, 8, "m", options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+                               "reduceOptions": {"calcs": ["lastNotNull"]}},
+      defaults={"decimals": 0, "noValue": "No landings yet"}, thresholds=DELAY_COLORS)
+y += 8
+panel("timeseries", "Average arrival delay (rolling 3 h)", [q("airport:arrival_delay:avg3h", "{{airport}}")],
+      0, 12, 8, "m", desc="Above 45 minutes for 30 minutes (with 5+ landings), the ArrivalDelaysHigh alert fires.",
+      defaults={"decimals": 0}, thresholds=steps((None, "transparent"), (45, "red")),
+      custom={"thresholdsStyle": {"mode": "dashed"}})
+panel("bargauge", "Scheduled arrivals detected by the pipeline (24 h)",
+      [q("airport:schedule_match:ratio24h", "{{airport}}", instant=True)],
+      12, 12, 8, "percentunit", desc="Completeness: the share of scheduled arrivals whose landing our ADS-B tracking detected. Low values mean receiver coverage gaps or callsigns that differ from the flight number.",
+      options={"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": True,
+               "reduceOptions": {"calcs": ["lastNotNull"]}},
+      defaults={"min": 0, "max": 1, "noValue": "No data yet"}, thresholds=steps((None, "red"), (0.5, "orange"), (0.8, "green")))
+y += 8
 
 row("Data health at a glance")
 panel("stat", "Flights tracked now", [q("flights_active")], 0, 4, 5, "short", options=STAT, thresholds=steps((None, "blue")))
