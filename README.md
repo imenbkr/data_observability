@@ -8,6 +8,8 @@ freshness, schema, distribution and lineage**.
 All data is real: aircraft positions come from public ADS-B receivers through the free
 [adsb.lol](https://adsb.lol) API, and routes come from open aviation datasets.
 
+![Live map and flights table in the Grafana dashboard](docs/images/live.jpg)
+
 ```mermaid
 flowchart LR
   A[adsb.lol<br/>live ADS-B API] -->|poll every 60 s| P[producer<br/>keep Tunisia flights · add route]
@@ -45,6 +47,10 @@ docker compose up -d --build
 | Grafana dashboard | http://localhost:3000 |
 | Kafka UI | http://localhost:8080 |
 | Prometheus | http://localhost:9090 |
+
+Kafka UI shows every message on the `tunisia.flights` topic, keyed by the aircraft's ICAO hex code:
+
+![tunisia.flights messages in Kafka UI](docs/images/kafka.jpg)
 
 The first flights show up on the map after about 1–2 minutes. Run `make help` for shortcuts
 such as `make flights` (flights found in the latest polls) or `make topic` (read raw Kafka messages).
@@ -117,11 +123,17 @@ CI needs no secrets. CD is off until the repository variable `ENABLE_CD` is `tru
 - **Map:** every plane flying to or from Tunisia, pointing in its direction of travel and coloured by altitude.
 - **Flights table:** flight, airline, direction, from → to, status (climbing / cruising / descending), aircraft,
   altitude, speed, distance left, **estimated arrival**, **tracked since**, **last update**.
+- **Arrivals at Tunisian airports:** planes expected to land in the next 1 and 2 hours, and the next flights to land.
+- **Data health at a glance:** six numbers that say whether the pipeline is healthy right now.
 - **Five rows, one per pillar:** each one answers a single question about the data.
 
 ADS-B only carries position, not schedules. So *tracked since* is when the pipeline first
 saw the flight, and *estimated arrival* is calculated from the straight-line distance and the
 current speed.
+
+![Expected arrivals and next flights to land](docs/images/arrivals.jpg)
+
+![Data health stats: flights tracked, throughput, data age, rejects, delivery, alerts](docs/images/health.jpg)
 
 ## The data
 
@@ -172,6 +184,22 @@ Two real quirks this pipeline handles:
 - **Ground altitude:** `alt_baro` is the string `"ground"` instead of a number when an aircraft is on the ground.
 
 Every alert has `pillar` and `team=data-engineering` labels, ready for notification routing.
+
+**Volume, freshness and schema** rows:
+
+![Volume, freshness and schema panels](docs/images/pillars.jpg)
+
+**Distribution** row:
+
+![Distribution panels: airlines, countries, direction, aircraft, altitude](docs/images/distribution.jpg)
+
+**Lineage** row: the count at each stage makes losses between stages visible:
+
+![Lineage counts from adsb.lol to valid messages, and API requests per area](docs/images/lineage.jpg)
+
+The alert rules in Prometheus (http://localhost:9090/alerts):
+
+![Alert rule groups in Prometheus](docs/images/alerts.jpg)
 
 ## Forecasting use cases
 
@@ -249,7 +277,7 @@ from the notebook by `scripts/build_forecast_dashboard.py`; `make notebook` rebu
 ├── .github/workflows/           # CI (lint, checks, images) and CD (rules + Terraform to Grafana Cloud)
 ├── terraform/main.tf            # dashboard, ML forecast + alert (and notebook) on Grafana Cloud as code
 ├── grafana/notebooks/           # "Detect data volume drops" notebook (scripts/build_notebook.py)
-├── docs/                        # the notebook exported as Markdown
+├── docs/                        # the notebook exported as Markdown, README screenshots (docs/images/)
 └── grafana/                     # data source, dashboard provisioning, dashboard JSON
 ```
 
