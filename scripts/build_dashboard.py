@@ -8,7 +8,7 @@ import pathlib
 OUT = pathlib.Path(__file__).resolve().parent.parent / "grafana" / "dashboards" / "tunisia-flights.json"
 # A data source variable lets the same JSON work self-hosted and on Grafana Cloud
 DS = {"type": "prometheus", "uid": "${datasource}"}
-G, O, R = "green", "orange", "red"
+GREEN, ORANGE, RED = "green", "orange", "red"
 STAT = {"reduceOptions": {"calcs": ["lastNotNull"]}, "colorMode": "background", "graphMode": "area", "textMode": "value"}
 
 panels = []
@@ -230,14 +230,14 @@ panel("stat", "Flights tracked now", [q("flights_active")], 0, 4, 5, "short", op
 panel("stat", "Positions received / min", [q("flights:messages:per_minute")], 4, 4, 5, "short", options=STAT, thresholds=steps((None, "blue")))
 panel("stat", "Data age (95% under)", [q("flights:position_age:p95")], 8, 4, 5, "s", options=STAT,
       desc="How old a plane position is when we process it. 95% of positions are newer than this.",
-      thresholds=steps((None, G), (120, O), (180, R)))
+      thresholds=steps((None, GREEN), (120, ORANGE), (180, RED)))
 panel("stat", "Rejected messages", [q("flights:invalid:ratio")], 12, 4, 5, "percentunit", options=STAT,
-      thresholds=steps((None, G), (0.02, O), (0.05, R)))
+      thresholds=steps((None, GREEN), (0.02, ORANGE), (0.05, RED)))
 panel("stat", "Messages delivered", [q("flights:completeness:ratio")], 16, 4, 5, "percentunit", options=STAT,
       desc="Messages received by the quality checker / messages sent to Kafka.",
-      thresholds=steps((None, R), (0.95, O), (0.99, G)))
+      thresholds=steps((None, RED), (0.95, ORANGE), (0.99, GREEN)))
 panel("stat", "Active alerts", [q('count(ALERTS{alertstate="firing", team="data-engineering"}) or vector(0)', instant=True)],
-      20, 4, 5, "short", options=STAT, thresholds=steps((None, G), (1, R)))
+      20, 4, 5, "short", options=STAT, thresholds=steps((None, GREEN), (1, RED)))
 y += 5
 
 row("1 · Volume: are we receiving as much data as usual?")
@@ -261,7 +261,7 @@ panel("timeseries", "Where the time goes (95th percentile)", [q("flights:stage_l
       custom={"stacking": {"mode": "normal"}, "fillOpacity": 40})
 panel("timeseries", "Time since last data pull", [q("time() - (producer_last_poll_timestamp_seconds > 0)", "seconds")], 16, 8, 8, "s",
       desc="Should stay around 60 s. Above 5 minutes the 'PipelineStalled' alert fires.",
-      thresholds=steps((None, G), (300, R)), custom={"thresholdsStyle": {"mode": "line+area"}})
+      thresholds=steps((None, GREEN), (300, RED)), custom={"thresholdsStyle": {"mode": "line+area"}})
 y += 8
 
 row("3 · Schema: is the data in the expected format?")

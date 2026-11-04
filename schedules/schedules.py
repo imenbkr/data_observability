@@ -62,9 +62,12 @@ def parse_utc(value):
     return datetime.strptime(value, "%Y-%m-%d %H:%MZ").replace(tzinfo=timezone.utc).timestamp()
 
 
+def local_time(t):
+    return (t + TUNISIA_UTC_OFFSET).strftime("%Y-%m-%dT%H:%M")
+
+
 def fetch(session, airport, start, end):
-    local = lambda t: (t + TUNISIA_UTC_OFFSET).strftime("%Y-%m-%dT%H:%M")
-    url = API.format(airport=airport, start=local(start), end=local(end))
+    url = API.format(airport=airport, start=local_time(start), end=local_time(end))
     resp = session.get(url, params={"direction": "Arrival", "withCodeshared": "false", "withCargo": "false",
                                     "withPrivate": "false", "withLocation": "false", "withLeg": "false",
                                     "withCancelled": "true"}, timeout=40)

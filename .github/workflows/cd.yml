@@ -1,0 +1,80 @@
+name: CD
+
+# Deploys monitoring-as-code to Grafana Cloud:
+#   - recording and alerting rules (prometheus/*.yml) with mimirtool
+#   - folders, dashboards and ML forecast jobs (terraform/) with Terraform
+#
+# Pull requests get a Terraform plan; pushes to main apply it.
+# Off until the repository variable ENABLE_CD is "true" (see README, "CI/CD").
+on:
+  push:
+    branches: [main]
+    paths: ["prometheus/**", "grafana/**", "terraform/**", ".github/workflows/cd.yml"]
+  pull_request:
+    paths: ["prometheus/**", "grafana/**", "terraform/**", ".github/workflows/cd.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-grafana-cloud
+  cancel-in-progress: false
+
+env:
+  GRAFANA_CLOUD_PROM_URL: ${{ vars.GRAFANA_CLOUD_PROM_URL }}
+  GRAFANA_CLOUD_PROM_USER: ${{ vars.GRAFANA_CLOUD_PROM_USER }}
+  GRAFANA_CLOUD_API_TOKEN: ${{ secrets.GRAFANA_CLOUD_API_TOKEN }}
+
+jobs:
+  rules:
+    name: Alert and recording rules
+    if: vars.ENABLE_CD == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show rule changes
+        run: >
+          docker run --rm -v "$PWD/prometheus:/rules:ro" grafana/mimirtool:2.14.0
+          rules diff /rules/rules.yml /rules/alerts.yml
+          --address="${GRAFANA_CLOUD_PROM_URL%/api/prom/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
+      - name: Apply rules
+        if: github.event_name != 'pull_request'
+        run: >
+          docker run --rm -v "$PWD/prometheus:/rules:ro" grafana/mimirtool:2.14.0
+          rules sync /rules/rules.yml /rules/alerts.yml
+          --address="${GRAFANA_CLOUD_PROM_URL%/api/prom/push}" --id="$GRAFANA_CLOUD_PROM_USER" --key="$GRAFANA_CLOUD_API_TOKEN"
+
+  terraform:
+    name: Dashboards and ML jobs
+    if: vars.ENABLE_CD == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_VAR_grafana_url: ${{ vars.GRAFANA_CLOUD_URL }}
+      TF_VAR_grafana_token: ${{ secrets.GRAFANA_CLOUD_SA_TOKEN }}
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      # State lives in HCP Terraform so every run sees what already exists.
+      # The override file keeps local runs on the default (local) backend.
+      - name: Use HCP Terraform for state
+        run: |
+          cat > cloud_override.tf <<EOF
+          terraform {
+            cloud {
+              organization = "${{ vars.TF_CLOUD_ORGANIZATION }}"
+              workspaces { name = "${{ vars.TF_WORKSPACE }}" }
+            }
+          }
+          EOF
+      - run: terraform init -input=false
+      - run: terraform plan -input=false -out=tfplan
+      - name: Apply
+        if: github.event_name != 'pull_request'
+        run: terraform apply -input=false tfplan

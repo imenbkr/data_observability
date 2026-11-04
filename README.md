@@ -83,6 +83,32 @@ container replaces local Prometheus and Grafana and sends the metrics to your Gr
    After changing the dashboard (`python3 scripts/build_dashboard.py`), run `plan` and `apply` again.
    Pick `grafanacloud-…-prom` in the dashboard's **Data source** dropdown if it isn't selected.
 
+## CI/CD (GitHub Actions)
+
+| Workflow | When | What |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | Every push and pull request | Ruff lint; checks that dashboards, notebook and its Markdown export match their generator scripts; `promtool` on Prometheus config and rules; Alloy and Compose config; `terraform fmt` + `validate`; builds the 3 images and publishes them to `ghcr.io` from `main` |
+| [`cd.yml`](.github/workflows/cd.yml) | Push to `main` (and plan-only on pull requests) touching `prometheus/`, `grafana/` or `terraform/` | Syncs recording and alerting rules to Grafana Cloud with `mimirtool`; Terraform plan/apply for folders, dashboards and ML forecast jobs |
+
+CI needs no secrets. CD is off until the repository variable `ENABLE_CD` is `true`. To turn it on:
+
+1. **Terraform state in HCP Terraform** (free): create an organization and a CLI-driven workspace at
+   [app.terraform.io](https://app.terraform.io), set its **Execution Mode** to **Local** (state only),
+   and create a user API token. Move your local state there once, so CD sees the existing resources:
+
+   ```bash
+   cd terraform && printf 'terraform {\n  cloud {\n    organization = "<org>"\n    workspaces { name = "<workspace>" }\n  }\n}\n' > cloud_override.tf
+   terraform login && terraform init -migrate-state
+   ```
+
+2. **GitHub → Settings → Secrets and variables → Actions:**
+
+   | Secrets | Variables |
+   |---|---|
+   | `GRAFANA_CLOUD_API_TOKEN` (access policy: metrics write, rules read/write) | `GRAFANA_CLOUD_URL`, `GRAFANA_CLOUD_PROM_URL`, `GRAFANA_CLOUD_PROM_USER` |
+   | `GRAFANA_CLOUD_SA_TOKEN` (service account, Admin) | `TF_CLOUD_ORGANIZATION`, `TF_WORKSPACE` |
+   | `TF_API_TOKEN` (HCP Terraform) | `ENABLE_CD` = `true` |
+
 ## The dashboard
 
 - **How to read this dashboard:** a plain-language intro to the data and where it comes from.
@@ -220,6 +246,7 @@ from the notebook by `scripts/build_forecast_dashboard.py`; `make notebook` rebu
 ├── consumer/consumer.py         # Kafka → quality checks → metrics
 ├── prometheus/                  # scrape config, recording rules, alerts
 ├── alloy/config.alloy           # ships metrics to Grafana Cloud (profile "cloud")
+├── .github/workflows/           # CI (lint, checks, images) and CD (rules + Terraform to Grafana Cloud)
 ├── terraform/main.tf            # dashboard, ML forecast + alert (and notebook) on Grafana Cloud as code
 ├── grafana/notebooks/           # "Detect data volume drops" notebook (scripts/build_notebook.py)
 ├── docs/                        # the notebook exported as Markdown

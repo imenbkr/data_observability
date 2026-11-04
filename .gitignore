@@ -8,3 +8,5 @@ terraform/.terraform/
 terraform/*.tfstate*
 terraform/.terraform.lock.hcl
 scripts/take_screenshots.py
+terraform/*_override.tf
+.ruff_cache/
