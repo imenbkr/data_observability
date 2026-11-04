@@ -40,6 +40,7 @@ AREAS = [
 api_requests = Counter("adsb_api_requests_total", "Requests to adsb.lol", ["area", "status"])
 api_latency = Histogram("adsb_api_request_seconds", "adsb.lol response time", ["area"])
 aircraft_seen = Gauge("adsb_aircraft_in_areas", "All aircraft returned by the last poll")
+unique_aircraft = Gauge("adsb_unique_aircraft", "Distinct aircraft (by hex) in the last poll, overlaps removed")
 kept = Gauge("producer_tunisia_aircraft", "Aircraft on a Tunisia flight found in the last poll")
 sent = Counter("producer_messages_sent_total", "Messages acknowledged by Kafka")
 failed = Counter("producer_messages_failed_total", "Messages Kafka failed to acknowledge")
@@ -135,7 +136,7 @@ def main():
 
     while True:
         started = time.time()
-        latest, total = {}, 0
+        latest, total, hexes = {}, 0, set()
         for name, lat, lon in AREAS:
             try:
                 api_now, fetched_at, aircraft = fetch_area(session, name, lat, lon)
@@ -144,6 +145,7 @@ def main():
                 time.sleep(e.retry_after)
                 continue
             total += len(aircraft)
+            hexes.update(ac.get("hex") for ac in aircraft if ac.get("hex"))
             for ac in aircraft:
                 if not is_tunisia_flight((ac.get("flight") or "").strip(), routes):
                     continue
@@ -159,6 +161,7 @@ def main():
         producer.flush(10)
 
         aircraft_seen.set(total)
+        unique_aircraft.set(len(hexes))
         kept.set(len(latest))
         last_poll.set(time.time())
         print(f"poll: {total} aircraft, {len(latest)} Tunisia flights: "

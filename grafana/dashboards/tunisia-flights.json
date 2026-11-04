@@ -3685,7 +3685,7 @@
     },
     {
       "type": "stat",
-      "title": "① Planes seen by adsb.lol",
+      "title": "① Planes in view (avg, no duplicates)",
       "description": "Last hour",
       "id": 41,
       "datasource": {
@@ -3720,7 +3720,7 @@
             "uid": "${datasource}"
           },
           "refId": "A",
-          "expr": "sum(sum_over_time(adsb_aircraft_in_areas[1h:1m]))",
+          "expr": "avg_over_time((adsb_unique_aircraft > 0)[1h:1m])",
           "legendFormat": "__auto",
           "instant": true,
           "range": false

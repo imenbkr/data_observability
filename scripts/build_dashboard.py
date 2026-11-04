@@ -298,7 +298,7 @@ panel("bargauge", "Altitude of positions (last 24h)", [q("sum by (le) (increase(
 y += 7
 
 row("5 · Lineage: where does the data come from, and does it all arrive?")
-FLOW = [("① Planes seen by adsb.lol", "sum(sum_over_time(adsb_aircraft_in_areas[1h:1m]))"),
+FLOW = [("① Planes in view (avg, no duplicates)", "avg_over_time((adsb_unique_aircraft > 0)[1h:1m])"),
         ("② Tunisia flights kept", "sum(sum_over_time(producer_tunisia_aircraft[1h:1m]))"),
         ("③ Sent to Kafka", "sum(increase(producer_messages_sent_total[1h]))"),
         ("④ Received by quality checker", "sum(increase(flights_messages_total[1h]))"),
